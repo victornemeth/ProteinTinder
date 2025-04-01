@@ -15,6 +15,11 @@ Annotations are saved to a MySQL database with the following fields:
 - `given_annotation` (one of: `correct`, `wrong`, `unsure`)
 - `timestamp`
 
+## Use
+
+- Put your structures as pdb (cif may also work) into pdb_files folder
+- The name of the pdb file is also its protein_id
+
 ## Features
 
 - 🧬 Interactive 3D protein viewer
@@ -28,7 +33,7 @@ Annotations are saved to a MySQL database with the following fields:
 - Python / Django
 - MySQL
 - HTML / JS / 3Dmol.js
-- Docker (optional)
+- Docker
 
 ## Run Locally
 
@@ -36,5 +41,7 @@ Annotations are saved to a MySQL database with the following fields:
 git clone https://github.com/victornemeth/ProteinTinder.git
 cd ProteinTinder
 docker compose up -d --build
+```
 
+Connect via localhost:8000
 
