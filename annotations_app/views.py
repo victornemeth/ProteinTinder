@@ -98,3 +98,42 @@ def submit_annotation(request):
         logger = logging.getLogger(__name__)
         logger.error("Annotation failed:\n%s", traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
+@login_required
+def undo_last_annotation(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        protein_id = data.get('protein_id')
+        user = request.user
+        try:
+            ann = Annotation.objects.filter(protein__protein_id=protein_id, user=user).latest('timestamp')
+            ann.delete()
+            return JsonResponse({'success': True})
+        except Annotation.DoesNotExist:
+            return JsonResponse({'error': 'No annotation found to undo'}, status=404)
+    return JsonResponse({'error': 'Invalid method'}, status=405)
+
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from .models import Annotation
+
+@require_POST
+@login_required
+def undo_annotation(request):
+    user = request.user
+    try:
+        last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
+        protein = last_annotation.protein
+        last_annotation.delete()
+
+        # Return enough data to re-show the protein
+        return JsonResponse({
+            "success": True,
+            "protein_id": protein.protein_id,
+            "pdb_file_path": protein.pdb_file_path,
+            "name": protein.name,
+        })
+    except Annotation.DoesNotExist:
+        return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+

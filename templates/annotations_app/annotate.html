@@ -51,6 +51,13 @@
             margin-bottom: 10px;
         }
 
+        .undo-button {
+            margin-top: 10px;
+            padding: 8px 12px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+
         footer {
             margin-top: 40px;
             text-align: center;
@@ -88,16 +95,20 @@
         </p>
 
         <div class="swipe-instruction">
-            👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 👇 down = ❓ unsure
+            👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 🔻 down = ❓ unsure
         </div>
 
         <div id="pdbViewer">
             <p class="info-message">Initializing 3D Viewer...</p>
         </div>
 
+        <button class="undo-button" id="undoBtn">↩️ Undo Last Annotation</button>
+
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
+                const undoButton = document.getElementById("undoBtn");
+
                 if (!viewerElement || typeof $3Dmol === 'undefined') {
                     viewerElement.innerHTML = "<p class='error-message'>Viewer or 3Dmol.js failed to load.</p>";
                     return;
@@ -113,14 +124,10 @@
                     backgroundColor: 'white',
                 });
 
-                // Auto-rotation
-                let spinning = true;
                 function animateRotation() {
-                    if (spinning) {
-                        viewer.rotate(1); // rotate slightly
-                        viewer.render();
-                        requestAnimationFrame(animateRotation);
-                    }
+                    viewer.rotate(1);
+                    viewer.render();
+                    requestAnimationFrame(animateRotation);
                 }
 
                 const fileFormat = (() => {
@@ -135,18 +142,16 @@
                         viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
                         viewer.zoomTo();
                         viewer.render();
-                        animateRotation(); // Start spinning
-                        console.log("Protein rendered.");
+                        animateRotation();
                     })
                     .catch(error => {
                         viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                     });
 
-                // Swipe logic
                 let startX, startY, endX, endY;
 
                 function getSwipeDirection(dx, dy) {
-                    const minDistance = 100; // threshold for a clear swipe
+                    const minDistance = 150; // less sensitive
                     if (Math.abs(dx) > Math.abs(dy)) {
                         if (dx > minDistance) return 'right';
                         if (dx < -minDistance) return 'left';
@@ -157,11 +162,9 @@
                 }
 
                 function submitAnnotation(direction) {
-                    // Show temporary feedback
-                    let emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
+                    const emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
                     viewerElement.innerHTML = `<p class='info-message'>${emoji} Annotated as ${direction.toUpperCase()}</p>`;
 
-                    // Submit to backend (e.g., POST to /annotate/)
                     fetch("{% url 'annotations_app:annotate' %}", {
                         method: "POST",
                         headers: {
@@ -173,12 +176,28 @@
                             annotation: direction
                         })
                     }).then(() => {
-                        setTimeout(() => {
-                            window.location.reload(); // Load next protein
-                        }, 1000);
+                        setTimeout(() => window.location.reload(), 500);
                     });
                 }
 
+                undoButton.addEventListener("click", () => {
+                    fetch("{% url 'annotations_app:undo' %}", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": "{{ csrf_token }}"
+                        }
+                    }).then(response => response.json())
+                      .then(data => {
+                          if (data.success) {
+                              location.reload(); // re-render the previous protein
+                          } else {
+                              alert("Undo failed: " + data.error);
+                          }
+                      });
+                });
+
+                // Swipe touch
                 viewerElement.addEventListener('touchstart', e => {
                     startX = e.touches[0].clientX;
                     startY = e.touches[0].clientY;
@@ -193,7 +212,7 @@
                     if (direction) submitAnnotation(direction);
                 });
 
-                // Desktop fallback
+                // Mouse swipe
                 viewerElement.addEventListener('mousedown', e => {
                     startX = e.clientX;
                     startY = e.clientY;
