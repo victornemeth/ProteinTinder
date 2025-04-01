@@ -1,5 +1,8 @@
 # annotations_app/views.py
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.conf import settings # <--- ADD THIS LINE
@@ -52,3 +55,33 @@ def annotate_protein_view(request):
         context['message'] = 'All proteins annotated!'
 
     return render(request, 'annotations_app/annotate.html', context)
+
+@csrf_exempt  # Remove if you want to rely on CSRF token only
+@login_required
+def submit_annotation(request):
+    try:
+        if request.method == "POST":
+            data = json.loads(request.body)
+            protein_id = data.get("protein_id")
+            annotation_value = data.get("annotation")
+            user = request.user
+
+            if not protein_id or not annotation_value:
+                return JsonResponse({"error": "Missing data"}, status=400)
+
+            # Ensure protein exists
+            from .models import Protein, Annotation
+            protein = Protein.objects.get(protein_id=protein_id)
+
+            # Create annotation
+            Annotation.objects.create(
+                protein=protein,
+                user=user,
+                given_annotation=annotation_value
+            )
+            return JsonResponse({"success": True})
+
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+    except Exception as e:
+        logger.error("Annotation failed:\n%s", traceback.format_exc())
+        return JsonResponse({"error": str(e)}, status=500)

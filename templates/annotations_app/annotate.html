@@ -25,8 +25,9 @@
             background-color: white;
             margin: 15px 0;
             box-shadow: 0 0 6px rgba(0,0,0,0.1);
-            position: relative; /* 🔥 This is the key */
+            position: relative;
             overflow: hidden;
+            touch-action: none;
         }
 
         .info-message, .error-message {
@@ -56,13 +57,8 @@
             font-size: 0.9em;
             color: #777;
         }
-
-        button {
-            margin: 5px;
-            padding: 8px 16px;
-            font-size: 1em;
-        }
     </style>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 <body>
@@ -99,13 +95,9 @@
             <p class="info-message">Initializing 3D Viewer...</p>
         </div>
 
-        <div id="annotationResult" class="info-message" style="display:none;"></div>
-
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
-                const resultElement = document.getElementById("annotationResult");
-
                 if (!viewerElement || typeof $3Dmol === 'undefined') {
                     viewerElement.innerHTML = "<p class='error-message'>Viewer or 3Dmol.js failed to load.</p>";
                     return;
@@ -118,8 +110,18 @@
 
                 const viewer = $3Dmol.createViewer(viewerElement, {
                     defaultcolors: $3Dmol.elementColors.rasmol,
-                    backgroundColor: 'white'
+                    backgroundColor: 'white',
                 });
+
+                // Auto-rotation
+                let spinning = true;
+                function animateRotation() {
+                    if (spinning) {
+                        viewer.rotate(1); // rotate slightly
+                        viewer.render();
+                        requestAnimationFrame(animateRotation);
+                    }
+                }
 
                 const fileFormat = (() => {
                     let ext = pdbFilename.split('.').pop().toLowerCase();
@@ -133,27 +135,48 @@
                         viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
                         viewer.zoomTo();
                         viewer.render();
-                        console.log("Rendered:", fileUrl);
+                        animateRotation(); // Start spinning
+                        console.log("Protein rendered.");
                     })
                     .catch(error => {
                         viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                     });
 
                 // Swipe logic
-                let startX, startY;
+                let startX, startY, endX, endY;
 
-                function handleSwipe(direction) {
-                    let message;
-                    if (direction === 'right') message = `✅ Annotated as CORRECT`;
-                    else if (direction === 'left') message = `❌ Annotated as WRONG`;
-                    else if (direction === 'down') message = `❓ Annotated as UNSURE`;
-                    else return;
+                function getSwipeDirection(dx, dy) {
+                    const minDistance = 100; // threshold for a clear swipe
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > minDistance) return 'right';
+                        if (dx < -minDistance) return 'left';
+                    } else {
+                        if (dy > minDistance) return 'down';
+                    }
+                    return null;
+                }
 
-                    resultElement.style.display = 'block';
-                    resultElement.textContent = message;
+                function submitAnnotation(direction) {
+                    // Show temporary feedback
+                    let emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
+                    viewerElement.innerHTML = `<p class='info-message'>${emoji} Annotated as ${direction.toUpperCase()}</p>`;
 
-                    // TODO: Send result to Django backend
-                    console.log(`Swipe result: ${direction} for ${proteinId}`);
+                    // Submit to backend (e.g., POST to /annotate/)
+                    fetch("{% url 'annotations_app:annotate' %}", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": "{{ csrf_token }}"
+                        },
+                        body: JSON.stringify({
+                            protein_id: proteinId,
+                            annotation: direction
+                        })
+                    }).then(() => {
+                        setTimeout(() => {
+                            window.location.reload(); // Load next protein
+                        }, 1000);
+                    });
                 }
 
                 viewerElement.addEventListener('touchstart', e => {
@@ -162,15 +185,12 @@
                 });
 
                 viewerElement.addEventListener('touchend', e => {
-                    const dx = e.changedTouches[0].clientX - startX;
-                    const dy = e.changedTouches[0].clientY - startY;
-
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        if (dx > 50) handleSwipe('right');
-                        else if (dx < -50) handleSwipe('left');
-                    } else {
-                        if (dy > 50) handleSwipe('down');
-                    }
+                    endX = e.changedTouches[0].clientX;
+                    endY = e.changedTouches[0].clientY;
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+                    const direction = getSwipeDirection(dx, dy);
+                    if (direction) submitAnnotation(direction);
                 });
 
                 // Desktop fallback
@@ -180,15 +200,12 @@
                 });
 
                 viewerElement.addEventListener('mouseup', e => {
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        if (dx > 50) handleSwipe('right');
-                        else if (dx < -50) handleSwipe('left');
-                    } else {
-                        if (dy > 50) handleSwipe('down');
-                    }
+                    endX = e.clientX;
+                    endY = e.clientY;
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+                    const direction = getSwipeDirection(dx, dy);
+                    if (direction) submitAnnotation(direction);
                 });
             });
         </script>
