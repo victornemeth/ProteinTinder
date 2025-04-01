@@ -5,24 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Annotate Protein: {% if protein %}{{ protein.protein_id }}{% else %}Not Found{% endif %}</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        #pdbViewer {
-            height: 500px;
-            width: 100%;
-            max-width: 800px;
-            border: 1px solid #ccc;
-            margin: 15px 0;
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            background-color: #fdfdfd;
         }
-        .error-message { color: red; font-weight: bold; border: 1px solid red; padding: 10px; margin-top: 10px; }
-        .warning-message { color: orange; font-weight: bold; border: 1px solid orange; padding: 10px; margin-top: 10px; }
-        .info-message { color: blue; padding: 10px; margin-top: 10px; }
-        small { color: #555; }
-    </style>
 
-    <!-- 3Dmol.js library -->
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #pdbViewer {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ccc;
+            background-color: white;
+            margin: 15px 0;
+            box-shadow: 0 0 6px rgba(0,0,0,0.1);
+            position: relative; /* 🔥 This is the key */
+            overflow: hidden;
+        }
+
+        .info-message, .error-message {
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .error-message {
+            color: red;
+            border: 1px solid red;
+            font-weight: bold;
+        }
+
+        .info-message {
+            color: blue;
+        }
+
+        .swipe-instruction {
+            font-size: 0.9em;
+            color: #777;
+            margin-bottom: 10px;
+        }
+
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #777;
+        }
+
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            font-size: 1em;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 <body>
+<div class="container">
     <h1>Protein Annotation Tool</h1>
 
     <div>
@@ -43,26 +87,27 @@
         {% endif %}
 
         <p>
-            <small>Source Filename (from DB): {{ protein.pdb_file_path }}</small><br>
-            <small>Constructed URL for Viewer: {{ media_url }}{{ protein.pdb_file_path }}</small>
+            <small>File: {{ protein.pdb_file_path }}</small><br>
+            <small>Viewer URL: {{ media_url }}{{ protein.pdb_file_path }}</small>
         </p>
+
+        <div class="swipe-instruction">
+            👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 👇 down = ❓ unsure
+        </div>
 
         <div id="pdbViewer">
             <p class="info-message">Initializing 3D Viewer...</p>
         </div>
 
-        <div>
-            <h3>Annotation Controls</h3>
-            <button type="button">Example Control</button>
-        </div>
+        <div id="annotationResult" class="info-message" style="display:none;"></div>
 
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
-                if (!viewerElement) return;
+                const resultElement = document.getElementById("annotationResult");
 
-                if (typeof $3Dmol === 'undefined') {
-                    viewerElement.innerHTML = "<p class='error-message'>3Dmol.js failed to load.</p>";
+                if (!viewerElement || typeof $3Dmol === 'undefined') {
+                    viewerElement.innerHTML = "<p class='error-message'>Viewer or 3Dmol.js failed to load.</p>";
                     return;
                 }
 
@@ -70,9 +115,6 @@
                 const pdbFilename = "{{ protein.pdb_file_path|escapejs }}";
                 const mediaUrl = "{{ media_url|escapejs }}";
                 const fileUrl = mediaUrl + pdbFilename;
-
-                console.log("Protein:", proteinId);
-                console.log("File:", fileUrl);
 
                 const viewer = $3Dmol.createViewer(viewerElement, {
                     defaultcolors: $3Dmol.elementColors.rasmol,
@@ -91,14 +133,63 @@
                         viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
                         viewer.zoomTo();
                         viewer.render();
-                        console.log("Molecule rendered.");
+                        console.log("Rendered:", fileUrl);
                     })
                     .catch(error => {
-                        console.error("Error loading structure:", error);
-                        viewerElement.innerHTML = `<p class='error-message'>Failed to load structure from ${fileUrl}<br>${error}</p>`;
+                        viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                     });
 
-                window.addEventListener("resize", () => viewer.resize());
+                // Swipe logic
+                let startX, startY;
+
+                function handleSwipe(direction) {
+                    let message;
+                    if (direction === 'right') message = `✅ Annotated as CORRECT`;
+                    else if (direction === 'left') message = `❌ Annotated as WRONG`;
+                    else if (direction === 'down') message = `❓ Annotated as UNSURE`;
+                    else return;
+
+                    resultElement.style.display = 'block';
+                    resultElement.textContent = message;
+
+                    // TODO: Send result to Django backend
+                    console.log(`Swipe result: ${direction} for ${proteinId}`);
+                }
+
+                viewerElement.addEventListener('touchstart', e => {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                });
+
+                viewerElement.addEventListener('touchend', e => {
+                    const dx = e.changedTouches[0].clientX - startX;
+                    const dy = e.changedTouches[0].clientY - startY;
+
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > 50) handleSwipe('right');
+                        else if (dx < -50) handleSwipe('left');
+                    } else {
+                        if (dy > 50) handleSwipe('down');
+                    }
+                });
+
+                // Desktop fallback
+                viewerElement.addEventListener('mousedown', e => {
+                    startX = e.clientX;
+                    startY = e.clientY;
+                });
+
+                viewerElement.addEventListener('mouseup', e => {
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > 50) handleSwipe('right');
+                        else if (dx < -50) handleSwipe('left');
+                    } else {
+                        if (dy > 50) handleSwipe('down');
+                    }
+                });
             });
         </script>
 
@@ -112,5 +203,6 @@
     <footer>
         <p><small>Annotation Tool &copy; 2025</small></p>
     </footer>
+</div>
 </body>
 </html>
