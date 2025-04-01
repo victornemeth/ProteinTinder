@@ -56,32 +56,45 @@ def annotate_protein_view(request):
 
     return render(request, 'annotations_app/annotate.html', context)
 
-@csrf_exempt  # Remove if you want to rely on CSRF token only
+@csrf_exempt  # Remove this if you're strictly using CSRF tokens
 @login_required
 def submit_annotation(request):
     try:
         if request.method == "POST":
             data = json.loads(request.body)
             protein_id = data.get("protein_id")
-            annotation_value = data.get("annotation")
+            direction = data.get("annotation")  # expected: 'right', 'left', or 'down'
             user = request.user
 
-            if not protein_id or not annotation_value:
+            if not protein_id or not direction:
                 return JsonResponse({"error": "Missing data"}, status=400)
 
+            # Map swipe directions to annotation values
+            direction_map = {
+                "right": "correct",
+                "left": "wrong",
+                "down": "unsure"
+            }
+
+            if direction not in direction_map:
+                return JsonResponse({"error": "Invalid annotation direction"}, status=400)
+
             # Ensure protein exists
-            from .models import Protein, Annotation
             protein = Protein.objects.get(protein_id=protein_id)
 
-            # Create annotation
+            # Save annotation
             Annotation.objects.create(
                 protein=protein,
                 user=user,
-                given_annotation=annotation_value
+                given_annotation=direction_map[direction]
             )
+
             return JsonResponse({"success": True})
 
         return JsonResponse({"error": "Invalid request method"}, status=405)
+
     except Exception as e:
+        import traceback, logging
+        logger = logging.getLogger(__name__)
         logger.error("Annotation failed:\n%s", traceback.format_exc())
         return JsonResponse({"error": str(e)}, status=500)
