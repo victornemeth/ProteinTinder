@@ -1,0 +1,50 @@
+<!-- ~/annotate/templates/registration/signup.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign Up - Annotate App</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        form p { margin-bottom: 10px; }
+        label { display: inline-block; min-width: 150px; vertical-align: top; }
+        button { padding: 5px 10px; margin-top: 10px; }
+        .helptext { font-size: 0.8em; color: #666; display: block; margin-left: 155px; margin-top: -5px; margin-bottom: 10px; }
+        ul.errorlist { color: red; list-style: none; padding: 0; margin: -5px 0 5px 155px; }
+    </style>
+</head>
+<body>
+
+    <h2>Sign Up</h2>
+
+    <form method="post">
+        {% csrf_token %} {# IMPORTANT: Cross-Site Request Forgery protection #}
+
+        {% for field in form %}
+            <p>
+                <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
+                {{ field }} {# Render the form field widget #}
+
+                {% if field.help_text %}
+                    <span class="helptext">{{ field.help_text|safe }}</span>
+                {% endif %}
+
+                {% if field.errors %}
+                    {{ field.errors }} {# Render field-specific errors #}
+                {% endif %}
+            </p>
+        {% endfor %}
+
+        {% if form.non_field_errors %}
+            <div style="color: red;">
+                {{ form.non_field_errors }} {# Render general form errors #}
+            </div>
+        {% endif %}
+
+        <button type="submit">Sign Up</button>
+    </form>
+
+    <p>Already have an account? <a href="{% url 'login' %}">Login here</a>.</p>
+
+</body>
+</html>
