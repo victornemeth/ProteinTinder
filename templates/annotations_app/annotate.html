@@ -4,112 +4,113 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Annotate Protein: {% if protein %}{{ protein.protein_id }}{% else %}Not Found{% endif %}</title>
-<style>
-    body {
-        font-family: sans-serif;
-        margin: 20px;
-        background-color: #fdfdfd;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-
-    main {
-        width: 100%;
-        max-width: 900px;
-    }
-
-    #pdbViewer {
-        height: 500px;
-        width: 100%;
-        border: 1px solid #ccc;
-        box-shadow: 0 0 8px rgba(0,0,0,0.1);
-        margin: 15px 0;
-        background-color: white;
-    }
-
-    small {
-        color: #555;
-    }
-
-    .error-message {
-        color: red;
-        font-weight: bold;
-        border: 1px solid red;
-        padding: 10px;
-        margin-top: 10px;
-    }
-
-    .warning-message {
-        color: orange;
-        font-weight: bold;
-        border: 1px solid orange;
-        padding: 10px;
-        margin-top: 10px;
-    }
-
-    .info-message {
-        color: blue;
-        padding: 10px;
-        margin-top: 10px;
-    }
-
-    footer {
-        margin-top: 40px;
-        font-size: 0.9em;
-        color: #777;
-    }
-</style>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        #pdbViewer {
+            height: 500px;
+            width: 100%;
+            max-width: 800px;
+            border: 1px solid #ccc;
+            margin: 15px 0;
+        }
+        .error-message { color: red; font-weight: bold; border: 1px solid red; padding: 10px; margin-top: 10px; }
+        .warning-message { color: orange; font-weight: bold; border: 1px solid orange; padding: 10px; margin-top: 10px; }
+        .info-message { color: blue; padding: 10px; margin-top: 10px; }
+        small { color: #555; }
+    </style>
 
     <!-- 3Dmol.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-    <main>
-        <h1>Protein Annotation Tool</h1>
+    <h1>Protein Annotation Tool</h1>
 
-        <div>
-            {% if user.is_authenticated %}
-                <span>Welcome, {{ user.username }}!</span> |
-                <a href="{% url 'logout' %}?next={{ request.path }}">Logout</a>
-            {% else %}
-                <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
-                <a href="{% url 'signup' %}">Sign Up</a>
-            {% endif %}
-        </div>
-        <hr>
-
-        {% if protein %}
-            <h2>Annotate: {{ protein.protein_id }}</h2>
-            {% if protein.name %}
-                <p><strong>Name:</strong> {{ protein.name }}</p>
-            {% endif %}
-
-            <p>
-                <small>Source Filename (from DB): {{ protein.pdb_file_path }}</small><br>
-                <small>Constructed URL for Viewer: {{ media_url }}{{ protein.pdb_file_path }}</small>
-            </p>
-
-            <div id="pdbViewer">
-                <p class="info-message">Initializing 3D Viewer...</p>
-            </div>
-
-            <div>
-                <h3>Annotation Controls</h3>
-                <button type="button">Example Control</button>
-            </div>
-
-        {% elif message %}
-            <p class="info-message">{{ message }}</p>
+    <div>
+        {% if user.is_authenticated %}
+            <span>Welcome, {{ user.username }}!</span> |
+            <a href="{% url 'logout' %}?next={{ request.path }}">Logout</a>
         {% else %}
-            <p>No protein available for annotation or protein could not be loaded.</p>
+            <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
+            <a href="{% url 'signup' %}">Sign Up</a>
+        {% endif %}
+    </div>
+    <hr>
+
+    {% if protein %}
+        <h2>Annotate: {{ protein.protein_id }}</h2>
+        {% if protein.name %}
+            <p><strong>Name:</strong> {{ protein.name }}</p>
         {% endif %}
 
-        <hr>
-        <footer>
-            <p><small>Annotation Tool &copy; 2025</small></p>
-        </footer>
-    </main>
-</body>
+        <p>
+            <small>Source Filename (from DB): {{ protein.pdb_file_path }}</small><br>
+            <small>Constructed URL for Viewer: {{ media_url }}{{ protein.pdb_file_path }}</small>
+        </p>
 
+        <div id="pdbViewer">
+            <p class="info-message">Initializing 3D Viewer...</p>
+        </div>
+
+        <div>
+            <h3>Annotation Controls</h3>
+            <button type="button">Example Control</button>
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const viewerElement = document.getElementById("pdbViewer");
+                if (!viewerElement) return;
+
+                if (typeof $3Dmol === 'undefined') {
+                    viewerElement.innerHTML = "<p class='error-message'>3Dmol.js failed to load.</p>";
+                    return;
+                }
+
+                const proteinId = "{{ protein.protein_id|escapejs }}";
+                const pdbFilename = "{{ protein.pdb_file_path|escapejs }}";
+                const mediaUrl = "{{ media_url|escapejs }}";
+                const fileUrl = mediaUrl + pdbFilename;
+
+                console.log("Protein:", proteinId);
+                console.log("File:", fileUrl);
+
+                const viewer = $3Dmol.createViewer(viewerElement, {
+                    defaultcolors: $3Dmol.elementColors.rasmol,
+                    backgroundColor: 'white'
+                });
+
+                const fileFormat = (() => {
+                    let ext = pdbFilename.split('.').pop().toLowerCase();
+                    if (ext === 'ent') return 'pdb';
+                    if (ext === 'mmcif') return 'cif';
+                    return ['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb';
+                })();
+
+                $3Dmol.download(fileUrl, viewer, { format: fileFormat })
+                    .then(() => {
+                        viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                        viewer.zoomTo();
+                        viewer.render();
+                        console.log("Molecule rendered.");
+                    })
+                    .catch(error => {
+                        console.error("Error loading structure:", error);
+                        viewerElement.innerHTML = `<p class='error-message'>Failed to load structure from ${fileUrl}<br>${error}</p>`;
+                    });
+
+                window.addEventListener("resize", () => viewer.resize());
+            });
+        </script>
+
+    {% elif message %}
+        <p class="info-message">{{ message }}</p>
+    {% else %}
+        <p>No protein available for annotation or protein could not be loaded.</p>
+    {% endif %}
+
+    <hr>
+    <footer>
+        <p><small>Annotation Tool &copy; 2025</small></p>
+    </footer>
+</body>
 </html>
