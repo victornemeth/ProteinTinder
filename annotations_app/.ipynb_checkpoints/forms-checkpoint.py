@@ -23,7 +23,10 @@ class CustomUserCreationForm(UserCreationForm):
 
 
 
+# forms.py
 class PDBZipUploadForm(forms.Form):
     folder_name = forms.CharField(max_length=100)
+    annotation_title = forms.CharField(max_length=255)
+    annotation_description = forms.CharField(widget=forms.Textarea, required=False)
     zip_file = forms.FileField(label="Upload a ZIP file of PDBs")
 
