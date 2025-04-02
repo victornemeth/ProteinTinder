@@ -1,0 +1,8 @@
+<!-- templates/annotations_app/upload_zip.html -->
+<h2>Upload PDB ZIP Folder</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Upload</button>
+</form>
+<a href="{% url 'annotations_app:view_folders' %}">Back to Folder List</a>
