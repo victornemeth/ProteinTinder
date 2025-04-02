@@ -3,17 +3,80 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+import zipfile
+import tempfile
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.conf import settings # <--- ADD THIS LINE
 from django.contrib.auth import login # Import the login function
-from .models import Protein, Annotation
+from .models import ProteinFolder, Protein, Annotation
 from .forms import CustomUserCreationForm # Import the form we just created
-
+from .forms import PDBZipUploadForm
+import os
+from django.core.files.storage import default_storage
+from django.utils.text import slugify
 from django.shortcuts import redirect
 
 def redirect_to_annotate(request):
     return redirect('annotations_app:annotate_protein')
+
+@login_required
+def upload_zip_view(request):
+    if request.method == 'POST':
+        form = PDBZipUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            folder_name = form.cleaned_data['folder_name']
+            zip_file = request.FILES['zip_file']
+            user = request.user
+
+            # Create the folder object
+            folder = ProteinFolder.objects.create(name=folder_name, user=user)
+            safe_folder = slugify(folder_name)
+
+            # Create a temporary directory to extract
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                zip_path = os.path.join(tmpdirname, zip_file.name)
+
+                # Save uploaded zip temporarily
+                with open(zip_path, 'wb+') as temp_file:
+                    for chunk in zip_file.chunks():
+                        temp_file.write(chunk)
+
+                # Extract the zip
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(tmpdirname)
+
+                # Iterate over extracted files
+                for root, _, files in os.walk(tmpdirname):
+                    for filename in files:
+                        if filename.lower().endswith('.pdb'):
+                            protein_id, _ = os.path.splitext(filename)
+                            protein_id = protein_id.strip().upper()
+
+                            full_path = os.path.join(root, filename)
+                            relative_path = f"pdbs/{user.username}/{safe_folder}/{filename}"
+
+                            # Save to media storage
+                            with open(full_path, 'rb') as f:
+                                default_storage.save(relative_path, f)
+
+                            Protein.objects.create(
+                                protein_id=protein_id,
+                                pdb_file_path=relative_path,
+                                folder=folder
+                            )
+
+            return redirect('annotations_app:view_folders')
+    else:
+        form = PDBZipUploadForm()
+
+    return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+
+@login_required
+def view_folders(request):
+    folders = ProteinFolder.objects.filter(user=request.user)
+    return render(request, 'annotations_app/folder_list.html', {'folders': folders})
 
 
 def signup_view(request):
@@ -34,16 +97,15 @@ def signup_view(request):
     return render(request, 'registration/signup.html', context)
 
 @login_required
-def annotate_protein_view(request):
+def annotate_protein_view(request, folder_id=None):
     user = request.user
+    if folder_id:
+        proteins = Protein.objects.filter(folder_id=folder_id)
+    else:
+        proteins = Protein.objects.all()
 
-    # Get proteins the user has already annotated
-    annotated_protein_ids = Annotation.objects.filter(user=user).values_list('protein_id', flat=True)
-
-    # Get the next protein that hasn't been annotated
-    protein_to_annotate = Protein.objects.exclude(
-        protein_id__in=annotated_protein_ids
-    ).first()
+    annotated_ids = Annotation.objects.filter(user=user).values_list('protein_id', flat=True)
+    protein_to_annotate = proteins.exclude(protein_id__in=annotated_ids).first()
 
     context = {
         'protein': protein_to_annotate,
@@ -51,16 +113,16 @@ def annotate_protein_view(request):
     }
 
     if protein_to_annotate:
-        # Clean the file path (remove any leading 'app/media/' or '/app/media/')
         cleaned_path = protein_to_annotate.pdb_file_path
         for prefix in ['app/media/', '/app/media/']:
             if cleaned_path.startswith(prefix):
                 cleaned_path = cleaned_path.replace(prefix, '', 1)
         protein_to_annotate.pdb_file_path = cleaned_path
     else:
-        context['message'] = 'All proteins annotated!'
+        context['message'] = 'All proteins annotated in this folder!'
 
     return render(request, 'annotations_app/annotate.html', context)
+
 
 @csrf_exempt  # Remove this if you're strictly using CSRF tokens
 @login_required

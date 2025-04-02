@@ -1,0 +1,7 @@
+<h2>Choose a Folder to Annotate</h2>
+<ul>
+  {% for folder in folders %}
+    <li><a href="{% url 'annotations_app:annotate_protein' folder.id %}">{{ folder.name }}</a></li>
+  {% endfor %}
+</ul>
+<a href="{% url 'annotations_app:upload_zip' %}">Upload New Folder</a>

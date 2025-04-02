@@ -1,13 +1,13 @@
 # annotations_app/urls.py
-
-from django.urls import path
 from . import views
+from django.urls import path
 
-app_name = 'annotations_app' # Namespace for URLs
+app_name = 'annotations_app'
 
 urlpatterns = [
-    path('', views.annotate_protein_view, name='annotate_protein'),
-    path('annotate/', views.submit_annotation, name='annotate'),  # <-- this is the one you need
+    path('', views.view_folders, name='view_folders'),
+    path('upload/', views.upload_zip_view, name='upload_zip'),
+    path('folder/<int:folder_id>/annotate/', views.annotate_protein_view, name='annotate_protein'),
+    path('annotate/', views.submit_annotation, name='annotate'),
     path('undo/', views.undo_annotation, name='undo'),
-    # Add URL for submitting annotations later
 ]
