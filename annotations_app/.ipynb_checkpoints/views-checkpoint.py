@@ -19,6 +19,9 @@ from django.views.decorators.http import require_POST
 from .forms import CustomUserCreationForm, PDBZipUploadForm
 from .models import ProteinFolder, Protein, Annotation
 
+import csv
+from django.http import HttpResponse
+
 def redirect_to_annotate(request):
     folder = ProteinFolder.objects.first()
     if folder:
@@ -76,7 +79,20 @@ def upload_zip_view(request):
 @login_required
 def view_folders(request):
     folders = ProteinFolder.objects.all()
-    return render(request, 'annotations_app/folder_list.html', {'folders': folders})
+    folder_data = []
+
+    for folder in folders:
+        total_proteins = folder.proteins.count()
+        annotated_count = Annotation.objects.filter(folder=folder, user=request.user).count()
+        is_complete = total_proteins > 0 and total_proteins == annotated_count
+
+        folder_data.append({
+            'folder': folder,
+            'is_complete': is_complete,
+        })
+
+    return render(request, 'annotations_app/folder_list.html', {'folder_data': folder_data})
+
 
 def signup_view(request):
     if request.method == 'POST':
@@ -167,6 +183,30 @@ def submit_annotation(request):
         logger = logging.getLogger(__name__)
         logger.error("Annotation failed:\n%s", e, exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
+
+
+
+@login_required
+def download_annotations_csv(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    annotations = Annotation.objects.filter(folder=folder).select_related('user', 'protein')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="annotations_{folder.name}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Username', 'Protein ID', 'Annotation', 'Timestamp'])
+
+    for annotation in annotations:
+        writer.writerow([
+            annotation.user.username,
+            annotation.protein.protein_id,
+            annotation.get_given_annotation_display(),
+            annotation.timestamp
+        ])
+
+    return response
+
 
 @require_POST
 @login_required
