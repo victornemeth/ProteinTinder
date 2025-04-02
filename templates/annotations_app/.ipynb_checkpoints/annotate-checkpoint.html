@@ -118,6 +118,7 @@
                 }
 
                 const proteinId = "{{ protein.protein_id|escapejs }}";
+                const folderId = "{{ protein.folder.id|escapejs }}"; // ✅ Add this line!
                 const pdbFilename = "{{ protein.pdb_file_path|escapejs }}";
                 const mediaUrl = "{{ media_url|escapejs }}";
                 const fileUrl = mediaUrl + pdbFilename;
@@ -176,6 +177,7 @@
                         },
                         body: JSON.stringify({
                             protein_id: proteinId,
+                            folder_id: folderId,  // ✅ Send this to the backend
                             annotation: direction
                         })
                     }).then(() => {
