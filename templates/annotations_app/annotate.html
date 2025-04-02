@@ -8,38 +8,92 @@
         html, body {
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
-            background-color: #fdfdfd;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f8;
         }
 
         .container {
-            max-width: 900px;
+            max-width: 960px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 30px 20px;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .auth-bar {
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+
+        .auth-bar a {
+            text-decoration: none;
+            color: #007acc;
+        }
+
+        .card-stack {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            margin-top: 20px;
         }
 
         .card {
             width: 100%;
-            height: 500px;
-            position: relative;
-            border-radius: 10px;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 12px;
             background: white;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease-out;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
             will-change: transform;
+            transition: transform 0.3s ease-out;
             touch-action: none;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-feedback {
+            position: absolute;
+            font-size: 3em;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+        }
+
+        .feedback-right {
+            color: green;
+            top: 20px;
+            right: 30px;
+        }
+
+        .feedback-left {
+            color: red;
+            top: 20px;
+            left: 30px;
+        }
+
+        .feedback-down {
+            color: orange;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
         }
 
         #pdbViewer {
             width: 100%;
             height: 100%;
-            border-radius: 10px;
-            overflow: hidden;
         }
 
         .info-message, .error-message {
             padding: 10px;
             margin-top: 10px;
+            font-size: 0.9em;
         }
 
         .error-message {
@@ -49,45 +103,48 @@
         }
 
         .info-message {
-            color: blue;
+            color: #007acc;
         }
 
         .swipe-instruction {
             font-size: 0.9em;
-            color: #777;
-            margin-bottom: 10px;
+            color: #666;
+            margin-top: 10px;
         }
 
         .undo-button {
-            margin-top: 10px;
-            padding: 8px 12px;
+            margin-top: 12px;
+            padding: 10px 16px;
             font-size: 0.9em;
             cursor: pointer;
+            background-color: #eee;
+            border: none;
+            border-radius: 6px;
         }
 
         footer {
             margin-top: 40px;
             text-align: center;
             font-size: 0.9em;
-            color: #777;
+            color: #999;
         }
     </style>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 <div class="container">
     <h1>Protein Annotation Tool</h1>
 
-    <div>
+    <div class="auth-bar">
         {% if user.is_authenticated %}
-            <span>Welcome, {{ user.username }}!</span> |
+            Welcome, {{ user.username }} |
             <a href="{% url 'logout' %}?next={{ request.path }}">Logout</a>
         {% else %}
             <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
             <a href="{% url 'signup' %}">Sign Up</a>
         {% endif %}
     </div>
+
     <hr>
     <h3>{{ annotation_title }}</h3>
     <p>{{ annotation_description }}</p>
@@ -98,19 +155,18 @@
             <p><strong>Name:</strong> {{ protein.name }}</p>
         {% endif %}
 
-        <p>
-            <small>File: {{ protein.pdb_file_path }}</small><br>
-            <small>Viewer URL: {{ media_url }}{{ protein.pdb_file_path }}</small>
-        </p>
-
         <div class="swipe-instruction">
             👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 🔻 down = ❓ unsure
         </div>
 
-        <div class="card" id="swipeCard">
-            <div id="pdbViewer">
-                <p class="info-message">Initializing 3D Viewer...</p>
+        <div class="card-stack">
+            <div class="card" id="cardTop">
+                <div class="card-feedback feedback-right" id="feedbackRight">✅</div>
+                <div class="card-feedback feedback-left" id="feedbackLeft">❌</div>
+                <div class="card-feedback feedback-down" id="feedbackDown">❓</div>
+                <div id="pdbViewer"><p class="info-message">Initializing 3D Viewer...</p></div>
             </div>
+            <div class="card" style="z-index: -1; background-color: #f0f0f0;"></div>
         </div>
 
         <button class="undo-button" id="undoBtn">↩️ Undo Last Annotation</button>
@@ -118,13 +174,12 @@
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
-                const swipeCard = document.getElementById("swipeCard");
+                const swipeCard = document.getElementById("cardTop");
                 const undoButton = document.getElementById("undoBtn");
 
-                if (!viewerElement || typeof $3Dmol === 'undefined') {
-                    viewerElement.innerHTML = "<p class='error-message'>Viewer or 3Dmol.js failed to load.</p>";
-                    return;
-                }
+                const feedbackRight = document.getElementById("feedbackRight");
+                const feedbackLeft = document.getElementById("feedbackLeft");
+                const feedbackDown = document.getElementById("feedbackDown");
 
                 const proteinId = "{{ protein.protein_id|escapejs }}";
                 const folderId = "{{ protein.folder.id|escapejs }}";
@@ -145,9 +200,7 @@
 
                 const fileFormat = (() => {
                     let ext = pdbFilename.split('.').pop().toLowerCase();
-                    if (ext === 'ent') return 'pdb';
-                    if (ext === 'mmcif') return 'cif';
-                    return ['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb';
+                    return ext === 'ent' ? 'pdb' : (['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb');
                 })();
 
                 $3Dmol.download(fileUrl, viewer, { format: fileFormat })
@@ -160,17 +213,6 @@
                     .catch(error => {
                         viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                     });
-
-                function getSwipeDirection(dx, dy) {
-                    const minDistance = 150;
-                    if (Math.abs(dx) > Math.abs(dy)) {
-                        if (dx > minDistance) return 'right';
-                        if (dx < -minDistance) return 'left';
-                    } else {
-                        if (dy > minDistance) return 'down';
-                    }
-                    return null;
-                }
 
                 function submitAnnotation(direction) {
                     const emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
@@ -187,9 +229,7 @@
                             folder_id: folderId,
                             annotation: direction
                         })
-                    }).then(() => {
-                        setTimeout(() => window.location.reload(), 500);
-                    });
+                    }).then(() => setTimeout(() => window.location.reload(), 500));
                 }
 
                 undoButton.addEventListener("click", () => {
@@ -201,35 +241,42 @@
                         }
                     }).then(response => response.json())
                       .then(data => {
-                          if (data.success) {
-                              location.reload();
-                          } else {
-                              alert("Undo failed: " + data.error);
-                          }
+                          if (data.success) location.reload();
+                          else alert("Undo failed: " + data.error);
                       });
                 });
 
-                // Drag / Swipe Logic
-                let startX, startY, currentX, currentY, isDragging = false;
+                let startX, startY, isDragging = false;
+
+                function getSwipeDirection(dx, dy) {
+                    const minDistance = 150;
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > minDistance) return 'right';
+                        if (dx < -minDistance) return 'left';
+                    } else if (dy > minDistance) return 'down';
+                    return null;
+                }
 
                 function setCardTransform(dx, dy) {
                     const rotate = dx * 0.05;
                     swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
+                    feedbackRight.style.opacity = dx > 100 ? '1' : '0';
+                    feedbackLeft.style.opacity = dx < -100 ? '1' : '0';
+                    feedbackDown.style.opacity = dy > 100 ? '1' : '0';
                 }
 
                 function resetCardPosition() {
                     swipeCard.style.transition = "transform 0.3s ease-out";
                     swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
+                    feedbackRight.style.opacity = '0';
+                    feedbackLeft.style.opacity = '0';
+                    feedbackDown.style.opacity = '0';
                     setTimeout(() => swipeCard.style.transition = "", 300);
                 }
 
                 function handleSwipeEnd(dx, dy) {
                     const direction = getSwipeDirection(dx, dy);
-                    const absDx = Math.abs(dx);
-                    const absDy = Math.abs(dy);
-                    const threshold = 150;
-
-                    if ((absDx > threshold || absDy > threshold) && direction) {
+                    if (direction) {
                         const offX = dx > 0 ? window.innerWidth : -window.innerWidth;
                         const offY = dy > 0 ? window.innerHeight : -window.innerHeight;
                         swipeCard.style.transition = "transform 0.5s ease-out";
@@ -240,7 +287,7 @@
                     }
                 }
 
-                // Mouse
+                // Mouse Events
                 swipeCard.addEventListener('mousedown', e => {
                     isDragging = true;
                     startX = e.clientX;
@@ -249,10 +296,8 @@
 
                 document.addEventListener('mousemove', e => {
                     if (!isDragging) return;
-                    currentX = e.clientX;
-                    currentY = e.clientY;
-                    const dx = currentX - startX;
-                    const dy = currentY - startY;
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
                     setCardTransform(dx, dy);
                 });
 
@@ -264,7 +309,7 @@
                     handleSwipeEnd(dx, dy);
                 });
 
-                // Touch
+                // Touch Events
                 swipeCard.addEventListener('touchstart', e => {
                     isDragging = true;
                     startX = e.touches[0].clientX;
@@ -273,10 +318,8 @@
 
                 swipeCard.addEventListener('touchmove', e => {
                     if (!isDragging) return;
-                    currentX = e.touches[0].clientX;
-                    currentY = e.touches[0].clientY;
-                    const dx = currentX - startX;
-                    const dy = currentY - startY;
+                    const dx = e.touches[0].clientX - startX;
+                    const dy = e.touches[0].clientY - startY;
                     setCardTransform(dx, dy);
                 });
 
@@ -289,10 +332,8 @@
                 });
             });
         </script>
-    {% elif message %}
-        <p class="info-message">{{ message }}</p>
     {% else %}
-        <p>No protein available for annotation or protein could not be loaded.</p>
+        <p class="info-message">No protein available for annotation or protein could not be loaded.</p>
     {% endif %}
 
     <hr>
