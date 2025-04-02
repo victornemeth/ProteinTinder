@@ -40,11 +40,11 @@ services:
       DB_HOST: db # Use the service name 'db' as the host
       DB_PORT: 3306
       # Add other environment variables if needed
-      DJANGO_SECRET_KEY: "your-insecure-development-secret-key-change-me" # CHANGE THIS!
-      DJANGO_DEBUG: "True"
-      DJANGO_ALLOWED_HOSTS: "localhost 127.0.0.1 [::1] web" # Add 'web' service name
     depends_on:
       - db # Wait for the db service to start (but not necessarily be ready)
+    env_file:
+      - .env
+
     restart: unless-stopped
 
 volumes:
