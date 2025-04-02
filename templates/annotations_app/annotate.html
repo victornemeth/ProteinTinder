@@ -57,6 +57,18 @@
             justify-content: center;
         }
 
+        .card.glow-right {
+            box-shadow: 0 0 40px 10px rgba(0, 200, 0, 0.5);
+        }
+
+        .card.glow-left {
+            box-shadow: 0 0 40px 10px rgba(255, 0, 0, 0.5);
+        }
+
+        .card.glow-down {
+            box-shadow: 0 0 40px 10px rgba(255, 165, 0, 0.5);
+        }
+
         .card-feedback {
             position: absolute;
             font-size: 3em;
@@ -260,14 +272,21 @@
                 function setCardTransform(dx, dy) {
                     const rotate = dx * 0.05;
                     swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
+
+                    swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
                     feedbackRight.style.opacity = dx > 100 ? '1' : '0';
                     feedbackLeft.style.opacity = dx < -100 ? '1' : '0';
                     feedbackDown.style.opacity = dy > 100 ? '1' : '0';
+
+                    if (dx > 100) swipeCard.classList.add("glow-right");
+                    else if (dx < -100) swipeCard.classList.add("glow-left");
+                    else if (dy > 100) swipeCard.classList.add("glow-down");
                 }
 
                 function resetCardPosition() {
                     swipeCard.style.transition = "transform 0.3s ease-out";
                     swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
+                    swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
                     feedbackRight.style.opacity = '0';
                     feedbackLeft.style.opacity = '0';
                     feedbackDown.style.opacity = '0';
@@ -287,7 +306,6 @@
                     }
                 }
 
-                // Mouse Events
                 swipeCard.addEventListener('mousedown', e => {
                     isDragging = true;
                     startX = e.clientX;
@@ -309,7 +327,6 @@
                     handleSwipeEnd(dx, dy);
                 });
 
-                // Touch Events
                 swipeCard.addEventListener('touchstart', e => {
                     isDragging = true;
                     startX = e.touches[0].clientX;
