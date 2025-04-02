@@ -6,10 +6,13 @@ from django.conf import settings # To link to the User model
 class ProteinFolder(models.Model):
     name = models.CharField(max_length=100)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255, default="")
+    description = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} ({self.user.username})"
+
 
 
 class Protein(models.Model):
@@ -28,6 +31,8 @@ class Annotation(models.Model):
     ]
 
     protein = models.ForeignKey(Protein, on_delete=models.CASCADE, related_name='annotations')
+    folder = models.ForeignKey(ProteinFolder, on_delete=models.CASCADE, null=True, blank=True)
+    annotation_title = models.CharField(max_length=255, default="")
     # Use settings.AUTH_USER_MODEL to refer to the user model (best practice)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='annotations')
     # Storing user_name is redundant if you have the user foreign key,

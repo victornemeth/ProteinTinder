@@ -1,24 +1,31 @@
 # annotations_app/views.py
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+import os
 import json
 import zipfile
 import tempfile
-from django.shortcuts import render, redirect, get_object_or_404
+
+from django.conf import settings
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.conf import settings # <--- ADD THIS LINE
-from django.contrib.auth import login # Import the login function
-from .models import ProteinFolder, Protein, Annotation
-from .forms import CustomUserCreationForm # Import the form we just created
-from .forms import PDBZipUploadForm
-import os
 from django.core.files.storage import default_storage
+from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.text import slugify
-from django.shortcuts import redirect
+from django.views.decorators.csrf import csrf_exempt
+
+from .forms import CustomUserCreationForm, PDBZipUploadForm
+from .models import ProteinFolder, Protein, Annotation
+
 
 def redirect_to_annotate(request):
-    return redirect('annotations_app:annotate_protein')
+    # Try getting the first folder (can change to newest or user's if needed)
+    folder = ProteinFolder.objects.first()
+
+    if folder:
+        return redirect('annotations_app:annotate_protein', folder_id=folder.id)
+    else:
+        return redirect('annotations_app:upload_zip')
+
 
 @login_required
 def upload_zip_view(request):
@@ -26,11 +33,18 @@ def upload_zip_view(request):
         form = PDBZipUploadForm(request.POST, request.FILES)
         if form.is_valid():
             folder_name = form.cleaned_data['folder_name']
+            annotation_title = form.cleaned_data['annotation_title']
+            annotation_description = form.cleaned_data['annotation_description']
             zip_file = request.FILES['zip_file']
             user = request.user
 
-            # Create the folder object
-            folder = ProteinFolder.objects.create(name=folder_name, user=user)
+            # Save folder with title/desc
+            folder = ProteinFolder.objects.create(
+                name=folder_name,
+                user=user,
+                title=annotation_title,
+                description=annotation_description
+            )
             safe_folder = slugify(folder_name)
 
             # Create a temporary directory to extract
@@ -75,7 +89,7 @@ def upload_zip_view(request):
 
 @login_required
 def view_folders(request):
-    folders = ProteinFolder.objects.filter(user=request.user)
+    folders = ProteinFolder.objects.all()  # 🔁 instead of filtering by user
     return render(request, 'annotations_app/folder_list.html', {'folders': folders})
 
 
@@ -96,33 +110,45 @@ def signup_view(request):
     context = {'form': form}
     return render(request, 'registration/signup.html', context)
 
+
+
 @login_required
 def annotate_protein_view(request, folder_id=None):
     user = request.user
+
+    # If no folders at all, redirect to upload page
+    if ProteinFolder.objects.count() == 0:
+        return redirect('annotations_app:upload_zip')
+
+    # If a folder is selected, filter proteins from that folder
     if folder_id:
-        proteins = Protein.objects.filter(folder_id=folder_id)
+        proteins_qs = Protein.objects.filter(folder_id=folder_id)
     else:
-        proteins = Protein.objects.all()
+        return redirect('annotations_app:view_folders')  # Redirect to folder chooser
 
+    # Get already annotated proteins
     annotated_ids = Annotation.objects.filter(user=user).values_list('protein_id', flat=True)
-    protein_to_annotate = proteins.exclude(protein_id__in=annotated_ids).first()
+    protein_to_annotate = proteins_qs.exclude(protein_id__in=annotated_ids).first()
 
+    if not protein_to_annotate:
+        return redirect('annotations_app:view_folders')
+
+    # Safe folder access
+    folder = getattr(protein_to_annotate, 'folder', None)
     context = {
         'protein': protein_to_annotate,
         'media_url': settings.MEDIA_URL,
+        'annotation_title': folder.title if folder else "",
+        'annotation_description': folder.description if folder else "",
     }
 
-    if protein_to_annotate:
-        cleaned_path = protein_to_annotate.pdb_file_path
+    # Clean up path
+    if protein_to_annotate.pdb_file_path:
         for prefix in ['app/media/', '/app/media/']:
-            if cleaned_path.startswith(prefix):
-                cleaned_path = cleaned_path.replace(prefix, '', 1)
-        protein_to_annotate.pdb_file_path = cleaned_path
-    else:
-        context['message'] = 'All proteins annotated in this folder!'
+            if protein_to_annotate.pdb_file_path.startswith(prefix):
+                protein_to_annotate.pdb_file_path = protein_to_annotate.pdb_file_path.replace(prefix, '', 1)
 
     return render(request, 'annotations_app/annotate.html', context)
-
 
 @csrf_exempt  # Remove this if you're strictly using CSRF tokens
 @login_required
@@ -149,13 +175,19 @@ def submit_annotation(request):
 
             # Ensure protein exists
             protein = Protein.objects.get(protein_id=protein_id)
+            folder = protein.folder
+            title = folder.title if folder else ""
+
 
             # Save annotation
             Annotation.objects.create(
                 protein=protein,
                 user=user,
-                given_annotation=direction_map[direction]
+                given_annotation=direction_map[direction],
+                folder=folder,
+                annotation_title=title
             )
+
 
             return JsonResponse({"success": True})
 
