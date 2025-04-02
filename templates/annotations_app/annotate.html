@@ -18,16 +18,23 @@
             padding: 20px;
         }
 
-        #pdbViewer {
+        .card {
             width: 100%;
             height: 500px;
-            border: 1px solid #ccc;
-            background-color: white;
-            margin: 15px 0;
-            box-shadow: 0 0 6px rgba(0,0,0,0.1);
             position: relative;
-            overflow: hidden;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease-out;
+            will-change: transform;
             touch-action: none;
+        }
+
+        #pdbViewer {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         .info-message, .error-message {
@@ -85,7 +92,6 @@
     <h3>{{ annotation_title }}</h3>
     <p>{{ annotation_description }}</p>
 
-
     {% if protein %}
         <h2>Annotate: {{ protein.protein_id }}</h2>
         {% if protein.name %}
@@ -101,8 +107,10 @@
             👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 🔻 down = ❓ unsure
         </div>
 
-        <div id="pdbViewer">
-            <p class="info-message">Initializing 3D Viewer...</p>
+        <div class="card" id="swipeCard">
+            <div id="pdbViewer">
+                <p class="info-message">Initializing 3D Viewer...</p>
+            </div>
         </div>
 
         <button class="undo-button" id="undoBtn">↩️ Undo Last Annotation</button>
@@ -110,6 +118,7 @@
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
+                const swipeCard = document.getElementById("swipeCard");
                 const undoButton = document.getElementById("undoBtn");
 
                 if (!viewerElement || typeof $3Dmol === 'undefined') {
@@ -118,7 +127,7 @@
                 }
 
                 const proteinId = "{{ protein.protein_id|escapejs }}";
-                const folderId = "{{ protein.folder.id|escapejs }}"; // ✅ Add this line!
+                const folderId = "{{ protein.folder.id|escapejs }}";
                 const pdbFilename = "{{ protein.pdb_file_path|escapejs }}";
                 const mediaUrl = "{{ media_url|escapejs }}";
                 const fileUrl = mediaUrl + pdbFilename;
@@ -152,10 +161,8 @@
                         viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                     });
 
-                let startX, startY, endX, endY;
-
                 function getSwipeDirection(dx, dy) {
-                    const minDistance = 150; // less sensitive
+                    const minDistance = 150;
                     if (Math.abs(dx) > Math.abs(dy)) {
                         if (dx > minDistance) return 'right';
                         if (dx < -minDistance) return 'left';
@@ -177,7 +184,7 @@
                         },
                         body: JSON.stringify({
                             protein_id: proteinId,
-                            folder_id: folderId,  // ✅ Send this to the backend
+                            folder_id: folderId,
                             annotation: direction
                         })
                     }).then(() => {
@@ -195,45 +202,93 @@
                     }).then(response => response.json())
                       .then(data => {
                           if (data.success) {
-                              location.reload(); // re-render the previous protein
+                              location.reload();
                           } else {
                               alert("Undo failed: " + data.error);
                           }
                       });
                 });
 
-                // Swipe touch
-                viewerElement.addEventListener('touchstart', e => {
-                    startX = e.touches[0].clientX;
-                    startY = e.touches[0].clientY;
-                });
+                // Drag / Swipe Logic
+                let startX, startY, currentX, currentY, isDragging = false;
 
-                viewerElement.addEventListener('touchend', e => {
-                    endX = e.changedTouches[0].clientX;
-                    endY = e.changedTouches[0].clientY;
-                    const dx = endX - startX;
-                    const dy = endY - startY;
+                function setCardTransform(dx, dy) {
+                    const rotate = dx * 0.05;
+                    swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
+                }
+
+                function resetCardPosition() {
+                    swipeCard.style.transition = "transform 0.3s ease-out";
+                    swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
+                    setTimeout(() => swipeCard.style.transition = "", 300);
+                }
+
+                function handleSwipeEnd(dx, dy) {
                     const direction = getSwipeDirection(dx, dy);
-                    if (direction) submitAnnotation(direction);
-                });
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+                    const threshold = 150;
 
-                // Mouse swipe
-                viewerElement.addEventListener('mousedown', e => {
+                    if ((absDx > threshold || absDy > threshold) && direction) {
+                        const offX = dx > 0 ? window.innerWidth : -window.innerWidth;
+                        const offY = dy > 0 ? window.innerHeight : -window.innerHeight;
+                        swipeCard.style.transition = "transform 0.5s ease-out";
+                        swipeCard.style.transform = `translate(${offX}px, ${offY}px) rotate(${dx * 0.1}deg)`;
+                        setTimeout(() => submitAnnotation(direction), 300);
+                    } else {
+                        resetCardPosition();
+                    }
+                }
+
+                // Mouse
+                swipeCard.addEventListener('mousedown', e => {
+                    isDragging = true;
                     startX = e.clientX;
                     startY = e.clientY;
                 });
 
-                viewerElement.addEventListener('mouseup', e => {
-                    endX = e.clientX;
-                    endY = e.clientY;
-                    const dx = endX - startX;
-                    const dy = endY - startY;
-                    const direction = getSwipeDirection(dx, dy);
-                    if (direction) submitAnnotation(direction);
+                document.addEventListener('mousemove', e => {
+                    if (!isDragging) return;
+                    currentX = e.clientX;
+                    currentY = e.clientY;
+                    const dx = currentX - startX;
+                    const dy = currentY - startY;
+                    setCardTransform(dx, dy);
+                });
+
+                document.addEventListener('mouseup', e => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    handleSwipeEnd(dx, dy);
+                });
+
+                // Touch
+                swipeCard.addEventListener('touchstart', e => {
+                    isDragging = true;
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                });
+
+                swipeCard.addEventListener('touchmove', e => {
+                    if (!isDragging) return;
+                    currentX = e.touches[0].clientX;
+                    currentY = e.touches[0].clientY;
+                    const dx = currentX - startX;
+                    const dy = currentY - startY;
+                    setCardTransform(dx, dy);
+                });
+
+                swipeCard.addEventListener('touchend', e => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    const dx = e.changedTouches[0].clientX - startX;
+                    const dy = e.changedTouches[0].clientY - startY;
+                    handleSwipeEnd(dx, dy);
                 });
             });
         </script>
-
     {% elif message %}
         <p class="info-message">{{ message }}</p>
     {% else %}
