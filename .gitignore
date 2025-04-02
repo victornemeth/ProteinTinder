@@ -1,11 +1,8 @@
 # Ignore virtual environments
-env/
 venv/
 .venv/
 
 # Ignore local settings
-.env
-*.env
 
 # Ignore OS files
 .DS_Store
