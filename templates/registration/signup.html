@@ -1,50 +1,144 @@
-<!-- ~/annotate/templates/registration/signup.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Sign Up - Annotate App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        form p { margin-bottom: 10px; }
-        label { display: inline-block; min-width: 150px; vertical-align: top; }
-        button { padding: 5px 10px; margin-top: 10px; }
-        .helptext { font-size: 0.8em; color: #666; display: block; margin-left: 155px; margin-top: -5px; margin-bottom: 10px; }
-        ul.errorlist { color: red; list-style: none; padding: 0; margin: -5px 0 5px 155px; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .signup-card {
+            background: white;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+            color: #007acc;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+            display: block;
+        }
+
+        input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+            width: 100%;
+        }
+
+        .helptext {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        ul.errorlist {
+            color: red;
+            font-size: 0.9em;
+            list-style: none;
+            padding: 0;
+            margin: 4px 0 0;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        button {
+            background-color: #007acc;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #005f99;
+        }
+
+        .link-row {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.95em;
+        }
+
+        .link-row a {
+            color: #007acc;
+            text-decoration: none;
+        }
+
+        .link-row a:hover {
+            text-decoration: underline;
+        }
+
+        .non-field-errors {
+            color: red;
+            font-size: 0.95em;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
+    <div class="signup-card">
+        <h2>Create Your Account</h2>
 
-    <h2>Sign Up</h2>
+        <form method="post">
+            {% csrf_token %}
 
-    <form method="post">
-        {% csrf_token %} {# IMPORTANT: Cross-Site Request Forgery protection #}
+            {% for field in form %}
+                <div class="form-field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
 
-        {% for field in form %}
-            <p>
-                <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
-                {{ field }} {# Render the form field widget #}
+                    {% if field.help_text %}
+                        <div class="helptext">{{ field.help_text|safe }}</div>
+                    {% endif %}
 
-                {% if field.help_text %}
-                    <span class="helptext">{{ field.help_text|safe }}</span>
-                {% endif %}
+                    {% if field.errors %}
+                        {{ field.errors }}
+                    {% endif %}
+                </div>
+            {% endfor %}
 
-                {% if field.errors %}
-                    {{ field.errors }} {# Render field-specific errors #}
-                {% endif %}
-            </p>
-        {% endfor %}
+            {% if form.non_field_errors %}
+                <div class="non-field-errors">{{ form.non_field_errors }}</div>
+            {% endif %}
 
-        {% if form.non_field_errors %}
-            <div style="color: red;">
-                {{ form.non_field_errors }} {# Render general form errors #}
-            </div>
-        {% endif %}
+            <button type="submit">🚀 Sign Up</button>
+        </form>
 
-        <button type="submit">Sign Up</button>
-    </form>
-
-    <p>Already have an account? <a href="{% url 'login' %}">Login here</a>.</p>
-
+        <div class="link-row">
+            Already have an account? <a href="{% url 'login' %}">Log in here</a>
+        </div>
+    </div>
 </body>
 </html>
