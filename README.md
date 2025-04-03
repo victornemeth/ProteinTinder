@@ -17,6 +17,12 @@ Annotations are saved to a MySQL database with the following fields:
 
 And can be exported to csv from within the webapp.
 
+## Stuff I need to Add
+
+- Overview of proteins that were correct, unsure or wrong
+- Be able to review a folder again (change annotations)
+
+
 ## Use
 
 - Make a account
