@@ -15,9 +15,12 @@ Annotations are saved to a MySQL database with the following fields:
 - `given_annotation` (one of: `correct`, `wrong`, `unsure`)
 - `timestamp`
 
+And can be exported to csv from within the webapp.
+
 ## Use
 
-- Put your structures as pdb (cif may also work) into pdb_files folder
+- Make a account
+- Upload your folder of pdbs as a zip file and add a annotation title (e.g. Correctly Folded?) and description
 - The name of the pdb file is also its protein_id
 
 ## Features
@@ -25,8 +28,7 @@ Annotations are saved to a MySQL database with the following fields:
 - 🧬 Interactive 3D protein viewer
 - 📱 Touch and mouse swipe support
 - 🔐 User authentication (login/signup)
-- 💾 Annotation history saved per user
-- 🔁 Auto-load next unannotated protein
+- 💾 Annotations can be exported as csv.
 
 ## Tech Stack
 
