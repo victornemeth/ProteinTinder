@@ -325,6 +325,8 @@
                             viewer.zoom(1.5);
                             viewer.render();
 
+                            viewer.spin(true); // Start spinning (default axis 'y')
+
                         })
                         .catch(error => {
                             if (viewerElement) viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;

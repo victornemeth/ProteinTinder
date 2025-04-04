@@ -229,6 +229,7 @@
                                     viewers[{{ protein.id }}].render();
                                     viewers[{{ protein.id }}].zoom(1.2); // Zoom slightly less for card view
                                     viewers[{{ protein.id }}].render(); // Re-render after zoom
+                                    viewers[{{ protein.id }}].spin(true); // Re-render after zoom
                                 })
                                 .catch(function(err){
                                     // Handle download errors
