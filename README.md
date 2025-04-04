@@ -20,6 +20,7 @@ And can be exported to csv from within the webapp.
 ## Stuff I need to Add
 
 - If you have suggestions please let me know!
+- Add arrow key support for pc users.
 - The ability to see an overview of the annotations of another user
 
 ## Use
