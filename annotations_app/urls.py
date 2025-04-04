@@ -11,4 +11,5 @@ urlpatterns = [
     path('annotate/folder/<int:folder_id>/download/', views.download_annotations_csv, name='download_annotations_csv'),
     path('annotate/', views.submit_annotation, name='annotate'),
     path('undo/', views.undo_annotation, name='undo'),
+    path('folder/<int:folder_id>/overview/', views.annotation_overview, name='annotation_overview'),
 ]

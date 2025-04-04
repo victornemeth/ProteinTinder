@@ -21,6 +21,7 @@ from .models import ProteinFolder, Protein, Annotation
 
 import csv
 from django.http import HttpResponse
+from collections import defaultdict
 
 def redirect_to_annotate(request):
     folder = ProteinFolder.objects.first()
@@ -224,3 +225,23 @@ def undo_annotation(request):
         })
     except Annotation.DoesNotExist:
         return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+
+@login_required
+def annotation_overview(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    annotations = Annotation.objects.filter(folder=folder, user=request.user).select_related('protein')
+
+    grouped = defaultdict(list)
+    for ann in annotations:
+        protein = ann.protein
+        # Strip off any '/app/media/' prefix if present (like in annotate_protein_view)
+        for prefix in ['app/media/', '/app/media/']:
+            if protein.pdb_file_path and protein.pdb_file_path.startswith(prefix):
+                protein.pdb_file_path = protein.pdb_file_path.replace(prefix, '', 1)
+        grouped[ann.given_annotation].append(protein)
+
+    return render(request, 'annotations_app/annotation_overview.html', {
+        'folder': folder,
+        'grouped_annotations': dict(grouped),
+        'media_url': settings.MEDIA_URL
+    })
