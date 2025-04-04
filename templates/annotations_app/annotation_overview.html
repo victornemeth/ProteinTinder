@@ -1,156 +1,89 @@
+<!-- templates/annotations_app/annotation_overview.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Annotation Overview</title>
+    <title>Annotation Overview: {{ folder.name }}</title>
     <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f4f6f8;
-            padding: 30px;
-            margin: 0;
-        }
-
-        h2 {
-            text-align: center;
-        }
-
-        h3 {
-            margin-top: 40px;
-            color: #007acc;
-        }
-
-        .protein-entry {
-            margin-bottom: 60px;
-        }
-
-        .viewer-container {
-            width: 100%; /* Or adjust as needed, e.g., 400px */
-            height: 300px; /* Or adjust as needed */
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            background: white;
-            position: relative; /* Needed for potential absolute positioning of error messages */
-        }
-
-        .viewer-wrapper {
-            width: 100%;
-            height: 100%;
-            /* Give wrappers a common class to select them easily */
-            /* The unique ID is still essential */
-        }
-
-        .back-link {
-            display: inline-block;
-            margin-top: 20px;
-            font-size: 1em;
-            color: #fff;
-            background-color: #007acc;
-            padding: 10px 16px;
-            border-radius: 6px;
-            text-decoration: none;
-        }
-
-        .back-link:hover {
-            background-color: #005f99;
-        }
-
-        .error-message {
-             padding: 1em;
-             color: red;
-             text-align: center;
-             position: absolute; /* Optional: center it nicely */
-             top: 50%;
-             left: 50%;
-             transform: translate(-50%, -50%);
-             width: 90%;
-        }
+        /* Basic styling */
+        body { font-family: sans-serif; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        h2, h3 { margin-top: 30px; }
+        ul { list-style: none; padding: 0; }
+        li { border-bottom: 1px solid #eee; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
+        .protein-info { display: flex; align-items: center; }
+        .thumbnail { width: 50px; height: 50px; margin-right: 15px; background-color: #f0f0f0; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 0.7em; text-align: center; overflow: hidden; }
+        .action-link { margin-left: 15px; font-size: 0.9em; color: #007acc; text-decoration: none; }
+        .action-link:hover { text-decoration: underline; }
+        .back-link { margin-bottom: 20px; display: inline-block; }
     </style>
+    <!-- Include 3Dmol.js if you want to show thumbnails -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 <body>
+    <div class="container">
+        <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Back to Folder List</a>
+        <h2>Annotation Overview for: {{ folder.name }}</h2>
+        <p><strong>Title:</strong> {{ folder.title }}</p>
+        <p><strong>Description:</strong> {{ folder.description }}</p>
 
-<h2>Annotation Overview for {{ folder.name }}</h2>
+        {% for annotation_type, proteins in grouped_annotations.items %}
+            <h3>{{ annotation_type|capfirst }} ({{ proteins|length }})</h3>
+            <ul>
+                {% for protein in proteins %}
+                <li>
+                    <span class="protein-info">
+                        <!-- Optional Thumbnail Placeholder -->
+                        <div id="viewer-{{ protein.id }}" class="thumbnail">Loading...</div>
+                        <span>{{ protein.protein_id }} {% if protein.name %}({{ protein.name }}){% endif %}</span>
+                    </span>
+                    <span>
+                        <!-- Link to re-annotate this specific protein -->
+                        <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}" class="action-link">Re-annotate</a>
+                    </span>
+                </li>
+                {% empty %}
+                <li>No proteins annotated as {{ annotation_type }}.</li>
+                {% endfor %}
+            </ul>
+        {% endfor %}
 
-{% for category, proteins in grouped_annotations.items %}
-    <h3>{{ category|capfirst }} ({{ proteins|length }})</h3>
+        {% if not grouped_annotations %}
+            <p>You haven't annotated any proteins in this folder yet.</p>
+            <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" class="action-link">Start Annotating</a>
+        {% endif %}
+    </div>
 
-    {% for protein in proteins %}
-        <div class="protein-entry">
-            <div class="viewer-container">
-                <!--
-                    - Add a common class 'structure-viewer' to easily select all viewers.
-                    - Add data-* attributes to store the protein-specific info.
-                -->
-                <div class="viewer-wrapper structure-viewer"
-                     id="viewer-{{ protein.id }}"
-                     data-pdb-path="{{ protein.pdb_file_path }}">        <!-- FIX: Removed |escapejs -->
-                     <!-- Placeholder content while loading -->
-                     <div style="text-align: center; padding-top: 50px; color: #888;">Loading structure...</div>
-                </div>
-            </div>
-            <div><strong>{{ protein.protein_id }}</strong>{% if protein.name %} - {{ protein.name }}{% endif %}</div>
-        </div>
-    {% endfor %}
-{% endfor %}
-
-<a class="back-link" href="{% url 'annotations_app:annotate_protein' folder.id %}">⬅ Back to Annotation</a>
-
-<!-- Single script block after all HTML elements are defined -->
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        // Get the base media URL from Django context (ensure it's passed in your view)
-        // Make sure it ends with a '/'
-        const mediaUrl = "{{ media_url|escapejs }}".endsWith('/') ? "{{ media_url|escapejs }}" : "{{ media_url|escapejs }}" + "/";
-
-        // Find all elements designated as structure viewers
-        const viewerElements = document.querySelectorAll('.structure-viewer');
-
-        viewerElements.forEach(element => {
-            const pdbPath = element.dataset.pdbPath; // Read the path from data attribute
-            const viewerId = element.id; // Get the unique ID
-
-            if (!pdbPath) {
-                console.error(`PDB path missing for viewer element with ID: ${viewerId}`);
-                element.innerHTML = `<p class="error-message">Error: Structure file path is missing.</p>`;
-                return; // Skip this viewer
-            }
-
-            const fileUrl = mediaUrl + pdbPath;
-            const fileFormat = pdbPath.toLowerCase().endsWith('.cif') ? 'cif' : 'pdb';
-
-            // Configuration for the viewer
-            const config = {
-                backgroundColor: 'white',
-                defaultcolors: $3Dmol.elementColors.rasmol
-            };
-
-            // Create the viewer instance, targeting the specific element
-            const viewer = $3Dmol.createViewer(element, config);
-
-            // Log file URL for debugging
-            console.log(`Attempting to load: ${fileUrl} for viewer ${viewerId}`);
-
-            // Download and render the structure
-            $3Dmol.download(fileUrl, viewer, { format: fileFormat })
-                .then(() => {
-                    viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
-                    viewer.zoomTo(); // Adjust zoom to fit the structure
-                    viewer.render();
-                    console.log(`Successfully loaded and rendered: ${fileUrl}`);
-                    // Optional: remove the "Loading..." placeholder if it wasn't overwritten
-                    const placeholder = element.querySelector('div[style*="Loading structure"]');
-                    if (placeholder) placeholder.remove();
-                })
-                .catch(error => {
-                    // Display error message inside the viewer div
-                    console.error(`Error loading structure for ${viewerId} from ${fileUrl}:`, error);
-                    element.innerHTML = `<p class="error-message">Error loading structure: ${error}.<br>Attempted path: ${fileUrl}</p>`;
-                });
+    <script>
+        // Optional: Tiny 3Dmol viewers for thumbnails
+        document.addEventListener("DOMContentLoaded", function() {
+            const viewers = {};
+            {% for annotation_type, proteins in grouped_annotations.items %}
+                {% for protein in proteins %}
+                    const viewerElement_{{ protein.id }} = document.getElementById('viewer-{{ protein.id }}');
+                    if (viewerElement_{{ protein.id }}) {
+                        try {
+                            const pdbPath_{{ protein.id }} = "{{ media_url }}{{ protein.pdb_file_path|escapejs }}";
+                            viewers[{{ protein.id }}] = $3Dmol.createViewer(viewerElement_{{ protein.id }}, { backgroundColor: 'lightgrey' });
+                            viewers[{{ protein.id }}].addModel(pdbPath_{{ protein.id }}, 'pdb')
+                                .then(function(){
+                                    viewers[{{ protein.id }}].setStyle({}, { cartoon: { color: 'spectrum' } });
+                                    viewers[{{ protein.id }}].zoomTo();
+                                    viewers[{{ protein.id }}].render();
+                                    // viewers[{{ protein.id }}].zoom(1.2); // Adjust zoom if needed
+                                })
+                                .catch(function(err){
+                                    viewerElement_{{ protein.id }}.innerHTML = 'Error';
+                                    console.error("Error loading PDB for thumbnail {{ protein.id }}:", err);
+                                });
+                        } catch (e) {
+                            viewerElement_{{ protein.id }}.innerHTML = 'No View';
+                            console.error("Error creating viewer for {{ protein.id }}:", e);
+                        }
+                    }
+                {% endfor %}
+            {% endfor %}
         });
-    });
-</script>
+    </script>
 
 </body>
 </html>
