@@ -21,6 +21,8 @@ from .models import ProteinFolder, Protein, Annotation
 
 import csv
 from django.http import HttpResponse
+from collections import defaultdict
+from django.contrib import messages # Import messages framework
 
 def redirect_to_annotate(request):
     folder = ProteinFolder.objects.first()
@@ -78,21 +80,26 @@ def upload_zip_view(request):
 
 @login_required
 def view_folders(request):
-    folders = ProteinFolder.objects.all()
+    # Fetch folders associated with the user or all folders if you want admins to see everything
+    # For now, let's assume users only see their own folders or all folders. Adjust if needed.
+    # folders = ProteinFolder.objects.filter(user=request.user) # Option: Only user's folders
+    folders = ProteinFolder.objects.all().order_by('name') # Show all folders
     folder_data = []
 
     for folder in folders:
         total_proteins = folder.proteins.count()
+        # Count annotations specifically for the current user and this folder
         annotated_count = Annotation.objects.filter(folder=folder, user=request.user).count()
         is_complete = total_proteins > 0 and total_proteins == annotated_count
 
         folder_data.append({
             'folder': folder,
             'is_complete': is_complete,
+            'total_proteins': total_proteins,
+            'annotated_count': annotated_count,
         })
 
     return render(request, 'annotations_app/folder_list.html', {'folder_data': folder_data})
-
 
 def signup_view(request):
     if request.method == 'POST':
@@ -104,32 +111,75 @@ def signup_view(request):
         form = CustomUserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
-@login_required
-def annotate_protein_view(request, folder_id=None):
-    user = request.user
-    if ProteinFolder.objects.count() == 0:
-        return redirect('annotations_app:upload_zip')
-    if folder_id:
-        proteins_qs = Protein.objects.filter(folder_id=folder_id)
-    else:
-        return redirect('annotations_app:view_folders')
-    annotated_ids = Annotation.objects.filter(user=user).values_list('protein__id', flat=True)
-    protein_to_annotate = proteins_qs.exclude(id__in=annotated_ids).first()
 
+@login_required
+def annotate_protein_view(request, folder_id, protein_pk=None): # Add protein_pk=None
+    user = request.user
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    proteins_qs = Protein.objects.filter(folder=folder).order_by('protein_id') # Ensure consistent order
+
+    protein_to_annotate = None
+    is_specific_redo = False # Flag to know if we loaded a specific protein
+
+    if protein_pk:
+        # If a specific protein PK is provided, load that protein
+        protein_to_annotate = get_object_or_404(Protein, pk=protein_pk, folder=folder)
+        # Optional: Add checks here if you need to verify user permissions for this specific protein/folder
+        is_specific_redo = True
+        messages.info(request, f"Re-annotating specific protein: {protein_to_annotate.protein_id}") # Optional feedback
+    else:
+        # Original logic: Find the next unannotated protein
+        if not proteins_qs.exists():
+            messages.warning(request, f"Folder '{folder.name}' contains no proteins.")
+            return redirect('annotations_app:view_folders')
+
+        annotated_ids = Annotation.objects.filter(user=user, folder=folder).values_list('protein__id', flat=True)
+        protein_to_annotate = proteins_qs.exclude(id__in=annotated_ids).first()
+
+        if not protein_to_annotate:
+            messages.info(request, f"You have completed annotating all proteins in folder '{folder.name}'.")
+            return redirect('annotations_app:annotation_overview', folder_id=folder.id)
+
+    # --- Common logic for both cases ---
     if not protein_to_annotate:
-        return redirect('annotations_app:view_folders')
-    folder = getattr(protein_to_annotate, 'folder', None)
+         # This case should ideally not be reached if logic above is correct, but as a fallback:
+         messages.error(request, "Could not find a protein to annotate.")
+         return redirect('annotations_app:view_folders')
+
+
+    # Prepare context
     context = {
         'protein': protein_to_annotate,
         'media_url': settings.MEDIA_URL,
-        'annotation_title': folder.title if folder else "",
-        'annotation_description': folder.description if folder else "",
+        'annotation_title': folder.title,
+        'annotation_description': folder.description,
+        'folder': folder, # Pass the whole folder object
+        'folder_id': folder.id,
+        'is_specific_redo': is_specific_redo, # Pass the flag to the template
     }
+
+    # Clean up pdb_file_path (same robust cleaning as before)
     if protein_to_annotate.pdb_file_path:
-        for prefix in ['app/media/', '/app/media/']:
-            if protein_to_annotate.pdb_file_path.startswith(prefix):
-                protein_to_annotate.pdb_file_path = protein_to_annotate.pdb_file_path.replace(prefix, '', 1)
+        try:
+            # Using default_storage.url might be simpler if configured correctly
+            # context['pdb_url'] = default_storage.url(protein_to_annotate.pdb_file_path)
+            # Manual relative path construction:
+            base_media_path = os.path.join(settings.MEDIA_ROOT, '')
+            pdb_full_path = default_storage.path(protein_to_annotate.pdb_file_path)
+            relative_path = os.path.relpath(pdb_full_path, base_media_path)
+            # Ensure forward slashes for URL compatibility
+            protein_to_annotate.cleaned_pdb_path = relative_path.replace(os.path.sep, '/')
+        except Exception as e:
+             logging.error(f"Error processing PDB path '{protein_to_annotate.pdb_file_path}': {e}")
+             messages.error(request, "Error finding the PDB file path.")
+             # Decide how to handle - maybe show error on page or redirect
+             protein_to_annotate.cleaned_pdb_path = None # Indicate path issue
+
+    # Pass the cleaned path to the template if using manual construction
+    context['cleaned_pdb_path'] = getattr(protein_to_annotate, 'cleaned_pdb_path', None)
+
     return render(request, 'annotations_app/annotate.html', context)
+
 
 @csrf_exempt
 @login_required
@@ -224,3 +274,78 @@ def undo_annotation(request):
         })
     except Annotation.DoesNotExist:
         return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+
+
+@login_required
+def annotation_overview(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+
+    # Get the flat list of annotations, SORTED BY THE GROUPING KEY FIRST
+    annotations = Annotation.objects.filter(
+        folder=folder,
+        user=request.user
+    ).select_related('protein').order_by('given_annotation', 'protein__protein_id') # CORRECTED ORDERING
+
+    # The template will handle the grouping now
+
+    # Clean paths directly on the protein objects within annotations
+    for ann in annotations:
+        protein = ann.protein
+        if protein.pdb_file_path:
+            try:
+                # Manual relative path construction:
+                base_media_path = os.path.join(settings.MEDIA_ROOT, '')
+                # Check if the path is already relative, avoid calling default_storage.path on relative paths
+                if not os.path.isabs(protein.pdb_file_path):
+                     # Assume it might be relative to MEDIA_ROOT already (e.g., 'pdbs/user/folder/file.pdb')
+                     # Or if it includes MEDIA_URL prefix, strip it if needed
+                     # This part might need adjustment based on exactly how paths are stored
+                     # For now, let's assume if it's not absolute, it's okay as is for URL construction
+                     pass # Keep the path as is
+                else:
+                    # If it's absolute, try to make it relative to MEDIA_ROOT
+                    pdb_full_path = default_storage.path(protein.pdb_file_path) # This might fail if path isn't in storage
+                    relative_path = os.path.relpath(pdb_full_path, base_media_path)
+                    # Ensure forward slashes for URL compatibility
+                    protein.pdb_file_path = relative_path.replace(os.path.sep, '/') # Overwrite original or use new attr
+
+            except ValueError as ve:
+                 # Handle cases where default_storage.path() fails (e.g., path not managed by storage)
+                 logging.warning(f"Could not resolve absolute path for protein {protein.id} ('{protein.pdb_file_path}'): {ve}. Assuming relative path.")
+                 # Ensure forward slashes even if we couldn't resolve it fully
+                 if protein.pdb_file_path:
+                     protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+            except Exception as e:
+                logging.error(f"Error processing PDB path for protein {protein.id} ('{protein.pdb_file_path}'): {e}")
+                protein.pdb_file_path = None # Indicate path issue
+
+        # Ensure forward slashes just in case
+        if protein.pdb_file_path:
+             protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+
+
+    return render(request, 'annotations_app/annotation_overview.html', {
+        'folder': folder,
+        'annotations': annotations, # Pass the correctly sorted flat queryset/list
+        'media_url': settings.MEDIA_URL
+    })
+
+@require_POST # Ensure this view only accepts POST requests
+@login_required
+def redo_folder_view(request, folder_id):
+    """
+    Deletes all annotations made by the current user for the specified folder
+    and redirects to the annotation view for that folder to start over.
+    """
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    user = request.user
+
+    # Delete annotations for this user and this folder
+    annotations_to_delete = Annotation.objects.filter(user=user, folder=folder)
+    count = annotations_to_delete.count()
+    annotations_to_delete.delete()
+
+    messages.success(request, f"Successfully reset {count} annotations for folder '{folder.name}'. You can now start annotating it again.")
+
+    # Redirect to the first protein annotation page for this folder
+    return redirect('annotations_app:annotate_protein', folder_id=folder.id)

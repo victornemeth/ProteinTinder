@@ -275,23 +275,58 @@ def undo_annotation(request):
     except Annotation.DoesNotExist:
         return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
 
+
 @login_required
 def annotation_overview(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
-    annotations = Annotation.objects.filter(folder=folder, user=request.user).select_related('protein')
 
-    grouped = defaultdict(list)
+    # Get the flat list of annotations, SORTED BY THE GROUPING KEY FIRST
+    annotations = Annotation.objects.filter(
+        folder=folder,
+        user=request.user
+    ).select_related('protein').order_by('given_annotation', 'protein__protein_id') # CORRECTED ORDERING
+
+    # The template will handle the grouping now
+
+    # Clean paths directly on the protein objects within annotations
     for ann in annotations:
         protein = ann.protein
-        # Strip off any '/app/media/' prefix if present (like in annotate_protein_view)
-        for prefix in ['app/media/', '/app/media/']:
-            if protein.pdb_file_path and protein.pdb_file_path.startswith(prefix):
-                protein.pdb_file_path = protein.pdb_file_path.replace(prefix, '', 1)
-        grouped[ann.given_annotation].append(protein)
+        if protein.pdb_file_path:
+            try:
+                # Manual relative path construction:
+                base_media_path = os.path.join(settings.MEDIA_ROOT, '')
+                # Check if the path is already relative, avoid calling default_storage.path on relative paths
+                if not os.path.isabs(protein.pdb_file_path):
+                     # Assume it might be relative to MEDIA_ROOT already (e.g., 'pdbs/user/folder/file.pdb')
+                     # Or if it includes MEDIA_URL prefix, strip it if needed
+                     # This part might need adjustment based on exactly how paths are stored
+                     # For now, let's assume if it's not absolute, it's okay as is for URL construction
+                     pass # Keep the path as is
+                else:
+                    # If it's absolute, try to make it relative to MEDIA_ROOT
+                    pdb_full_path = default_storage.path(protein.pdb_file_path) # This might fail if path isn't in storage
+                    relative_path = os.path.relpath(pdb_full_path, base_media_path)
+                    # Ensure forward slashes for URL compatibility
+                    protein.pdb_file_path = relative_path.replace(os.path.sep, '/') # Overwrite original or use new attr
+
+            except ValueError as ve:
+                 # Handle cases where default_storage.path() fails (e.g., path not managed by storage)
+                 logging.warning(f"Could not resolve absolute path for protein {protein.id} ('{protein.pdb_file_path}'): {ve}. Assuming relative path.")
+                 # Ensure forward slashes even if we couldn't resolve it fully
+                 if protein.pdb_file_path:
+                     protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+            except Exception as e:
+                logging.error(f"Error processing PDB path for protein {protein.id} ('{protein.pdb_file_path}'): {e}")
+                protein.pdb_file_path = None # Indicate path issue
+
+        # Ensure forward slashes just in case
+        if protein.pdb_file_path:
+             protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+
 
     return render(request, 'annotations_app/annotation_overview.html', {
         'folder': folder,
-        'grouped_annotations': dict(grouped),
+        'annotations': annotations, # Pass the correctly sorted flat queryset/list
         'media_url': settings.MEDIA_URL
     })
 
