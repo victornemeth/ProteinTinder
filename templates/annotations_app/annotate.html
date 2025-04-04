@@ -98,6 +98,18 @@
         .swipe-instruction span { /* Add spacing if needed */
              margin: 0 5px;
         }
+        .key-icon { /* Style for keyboard key icons */
+            display: inline-block;
+            border: 1px solid #adb5bd;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background-color: #ffffff;
+            font-size: 0.9em;
+            margin: 0 2px;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+            font-family: Consolas, Monaco, monospace; /* Monospace for key feel */
+        }
+
 
         /* --- Card Stack & Card --- */
         .card-stack {
@@ -123,6 +135,10 @@
             align-items: center;
             justify-content: center;
             border: 1px solid #dee2e6; /* Subtle border */
+            user-select: none; /* Prevent text selection during drag/interaction */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
         #pdbViewer {
             width: 100%;
@@ -251,6 +267,7 @@
         </div>
         <!-- END CONTEXT AND DESCRIPTION -->
 
+        <!-- UPDATED INSTRUCTION TEXT -->
         <div class="swipe-instruction">
             {# Updated instructions text for clarity #}
             👈 Swipe Left = ❌ Wrong   |   👉 Swipe Right = ✅ Correct    |   👇 Swipe Down = ❓ Unsure
@@ -280,7 +297,7 @@
         </div>
         <!-- END ACTION BUTTONS WRAPPER -->
 
-        <!-- Script remains the same -->
+        <!-- SCRIPT SECTION -->
         <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const viewerElement = document.getElementById("pdbViewer");
@@ -292,26 +309,25 @@
                 const feedbackDown = document.getElementById("feedbackDown");
 
                 const proteinId = "{{ protein.protein_id|escapejs }}";
-                const proteinPk = "{{ protein.pk|escapejs }}"; // Use PK if needed elsewhere
-                const folderId = "{{ folder.id|escapejs }}"; // Get from folder object
-                // Use the cleaned path passed from the view
+                const proteinPk = "{{ protein.pk|escapejs }}";
+                const folderId = "{{ folder.id|escapejs }}";
                 const pdbFilename = "{{ cleaned_pdb_path|escapejs }}";
                 const mediaUrl = "{{ media_url|escapejs }}";
-                const fileUrl = pdbFilename ? mediaUrl + pdbFilename : null; // Handle null path
+                const fileUrl = pdbFilename ? mediaUrl + pdbFilename : null;
 
-                const isSpecificRedo = {{ is_specific_redo|yesno:"true,false" }}; // Get flag
+                const isSpecificRedo = {{ is_specific_redo|yesno:"true,false" }};
+
+                let viewer = null; // Keep viewer reference accessible
 
                 // Only initialize viewer if we have a valid file path
                 if (fileUrl) {
-                    const viewer = $3Dmol.createViewer(viewerElement, {
+                    viewer = $3Dmol.createViewer(viewerElement, { // Assign to viewer variable
                         defaultcolors: $3Dmol.elementColors.rasmol,
                         backgroundColor: 'white',
                     });
 
-                    // Removed unused animateRotation function
-
                     const fileFormat = (() => {
-                        if (!pdbFilename) return 'pdb'; // Default if no filename
+                        if (!pdbFilename) return 'pdb';
                         let ext = pdbFilename.split('.').pop().toLowerCase();
                         return ext === 'ent' ? 'pdb' : (['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb');
                     })();
@@ -321,43 +337,43 @@
                             viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
                             viewer.zoomTo();
                             viewer.render();
-                            // Static zoom might be better than constant rotation
                             viewer.zoom(1.5);
                             viewer.render();
-
-                            viewer.spin(true); // Start spinning (default axis 'y')
-
+                            viewer.spin(true);
                         })
                         .catch(error => {
                             if (viewerElement) viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
                             console.error("3Dmol download error:", error);
                         });
-                } else if (viewerElement && !viewerElement.querySelector('.error-message')) { // Check element exists before modifying
+                } else if (viewerElement && !viewerElement.querySelector('.error-message')) {
                      viewerElement.innerHTML = `<p class='error-message'>PDB file path not available.</p>`;
                 }
 
 
                 function submitAnnotation(direction) {
                     const emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
-                    if(viewerElement) { // Ensure viewer element exists before modifying
+                    // Stop spin if viewer exists
+                    if (viewer) {
+                       viewer.spin(false);
+                    }
+                    if(viewerElement) {
                        viewerElement.innerHTML = `<p class='info-message'>${emoji} Annotated as ${direction.toUpperCase()}. Saving...</p>`;
                     }
 
-                    fetch("{% url 'annotations_app:annotate' %}", { // Or use 'annotate/submit/' if you changed the URL
+                    fetch("{% url 'annotations_app:annotate' %}", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : "{{ csrf_token }}" // More robust CSRF token retrieval
+                            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : "{{ csrf_token }}"
                         },
                         body: JSON.stringify({
-                            protein_id: proteinId, // Keep sending protein_id (the string identifier)
+                            protein_id: proteinId,
                             folder_id: folderId,
                             annotation: direction
                         })
                     })
                     .then(response => {
                         if (!response.ok) {
-                            // Attempt to read error response body
                             return response.text().then(text => {
                                 throw new Error(`HTTP error! status: ${response.status}, message: ${text || 'Server error'}`);
                             });
@@ -366,12 +382,9 @@
                     })
                     .then(data => {
                          if (data.success) {
-                            // --- REDIRECT LOGIC ---
                             if (isSpecificRedo) {
-                                // If we re-annotated a specific protein, go back to the overview
                                 window.location.href = "{% url 'annotations_app:annotation_overview' folder_id=folder.id %}";
                             } else {
-                                // Otherwise, load the next protein (reload the default annotation view)
                                 window.location.reload();
                             }
                          } else {
@@ -383,15 +396,14 @@
                         if(viewerElement) {
                              viewerElement.innerHTML = `<p class='error-message'>Failed to save annotation: ${error.message}. Please try again.</p>`;
                         }
-                        // Optionally reset the card after a delay on error
-                         setTimeout(resetCardPosition, 1500); // Give user time to see error
+                         setTimeout(resetCardPosition, 1500);
                     });
                 }
 
                 // --- UNDO BUTTON ---
-                if (undoButton) { // Check if button exists
+                if (undoButton) {
                     undoButton.addEventListener("click", () => {
-                        fetch("{% url 'annotations_app:undo' %}", { // Or 'annotate/undo/'
+                        fetch("{% url 'annotations_app:undo' %}", {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -405,7 +417,6 @@
                         })
                         .then(data => {
                               if (data.success) {
-                                // Reloading is usually fine for undo, takes you to the undone item
                                 window.location.reload();
                               } else {
                                 alert("Undo failed: " + (data.error || "Unknown error"));
@@ -419,95 +430,134 @@
                 }
 
 
-                // --- SWIPE LOGIC --- (Keep existing swipe logic: startX, startY, isDragging, etc.)
+                // --- SWIPE LOGIC ---
                  let startX, startY, isDragging = false;
+                 let actionInProgress = false; // --- NEW: Flag to prevent multiple submissions
 
                 function getSwipeDirection(dx, dy) {
-                    const minDistance = 100; // Adjusted sensitivity slightly
-                    const verticalThreshold = 1.5; // Make it harder to swipe down accidentally
+                    const minDistance = 100;
+                    const verticalThreshold = 1.5;
 
-                    if (Math.abs(dx) > Math.abs(dy) * verticalThreshold) { // Require more horizontal movement
+                    if (Math.abs(dx) > Math.abs(dy) * verticalThreshold) {
                         if (dx > minDistance) return 'right';
                         if (dx < -minDistance) return 'left';
-                    } else if (dy > Math.abs(dx) && dy > minDistance) { // Ensure downward movement is dominant and passes threshold
+                    } else if (dy > Math.abs(dx) && dy > minDistance) {
                          return 'down';
                     }
                     return null;
                 }
 
-                 function setCardTransform(dx, dy) {
-                     if (!swipeCard) return; // Check card exists
+                 function setCardTransform(dx, dy, directionHint = null) { // Added directionHint for keypress
+                     if (!swipeCard) return;
                      const rotate = dx * 0.05;
                      swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
 
-                     const glowThreshold = 80; // When to start showing glow/feedback
+                     const glowThreshold = 80;
 
                      swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
-                     if (feedbackRight) feedbackRight.style.opacity = dx > glowThreshold ? '1' : '0';
-                     if (feedbackLeft) feedbackLeft.style.opacity = dx < -glowThreshold ? '1' : '0';
-                     // Ensure down feedback is only shown if primarily vertical
-                     if (feedbackDown) feedbackDown.style.opacity = dy > glowThreshold && Math.abs(dx) < dy ? '1' : '0';
+                     let currentDirection = directionHint;
+                     if (!currentDirection) { // Determine from dx/dy if not provided (for swipe)
+                        if (dx > glowThreshold) currentDirection = 'right';
+                        else if (dx < -glowThreshold) currentDirection = 'left';
+                        else if (dy > glowThreshold && Math.abs(dx) < dy) currentDirection = 'down';
+                     }
 
-                     if (dx > glowThreshold) swipeCard.classList.add("glow-right");
-                     else if (dx < -glowThreshold) swipeCard.classList.add("glow-left");
-                     // Ensure down glow is only shown if primarily vertical
-                     else if (dy > glowThreshold && Math.abs(dx) < dy) swipeCard.classList.add("glow-down");
+                     // Show feedback/glow based on determined or hinted direction
+                     if (feedbackRight) feedbackRight.style.opacity = currentDirection === 'right' ? '1' : '0';
+                     if (feedbackLeft) feedbackLeft.style.opacity = currentDirection === 'left' ? '1' : '0';
+                     if (feedbackDown) feedbackDown.style.opacity = currentDirection === 'down' ? '1' : '0';
+
+                     if (currentDirection === 'right') swipeCard.classList.add("glow-right");
+                     else if (currentDirection === 'left') swipeCard.classList.add("glow-left");
+                     else if (currentDirection === 'down') swipeCard.classList.add("glow-down");
                  }
 
                  function resetCardPosition() {
                      if (!swipeCard) return;
+                     actionInProgress = false; // Reset flag
                      swipeCard.style.transition = "transform 0.3s ease-out";
                      swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
                      swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
                      if (feedbackRight) feedbackRight.style.opacity = '0';
                      if (feedbackLeft) feedbackLeft.style.opacity = '0';
                      if (feedbackDown) feedbackDown.style.opacity = '0';
-                     // Clear transition after it finishes
                      setTimeout(() => {
                         if (swipeCard) swipeCard.style.transition = "";
                      }, 300);
                  }
 
+                 // --- NEW: Function to trigger the animation and submission ---
+                 function triggerAction(direction) {
+                     if (!swipeCard || actionInProgress) return; // Prevent double actions
+                     actionInProgress = true; // Set flag
+
+                     // Animate card off screen before submitting
+                     let offX = 0, offY = 0, finalRotate = 0;
+                     const baseDistance = window.innerWidth > 0 ? window.innerWidth : 600; // Use window width or fallback
+
+                     switch(direction) {
+                         case 'right':
+                             offX = baseDistance;
+                             offY = 0; // Keep vertical position slight for effect
+                             finalRotate = 15; // Simulate swipe rotation
+                             setCardTransform(1, 0, 'right'); // Show feedback immediately
+                             break;
+                         case 'left':
+                             offX = -baseDistance;
+                             offY = 0;
+                             finalRotate = -15;
+                             setCardTransform(-1, 0, 'left'); // Show feedback immediately
+                             break;
+                         case 'down':
+                             offX = 0; // Keep horizontal position
+                             offY = window.innerHeight > 0 ? window.innerHeight : 800;
+                             finalRotate = 0; // No rotation for down
+                             setCardTransform(0, 1, 'down'); // Show feedback immediately
+                             break;
+                         default:
+                            actionInProgress = false; // Invalid direction
+                            return;
+                     }
+
+                     // Apply animation styles
+                     swipeCard.style.transition = "transform 0.4s ease-out";
+                     swipeCard.style.transform = `translate(${offX}px, ${offY}px) rotate(${finalRotate}deg)`;
+
+                     // Wait for animation to be visible before submitting
+                     setTimeout(() => submitAnnotation(direction), 200); // Keep delay
+                 }
+
+
                  function handleSwipeEnd(dx, dy) {
                      if (!swipeCard) return;
                      const direction = getSwipeDirection(dx, dy);
                      if (direction) {
-                         // Animate card off screen before submitting
-                         const offX = direction === 'right' ? window.innerWidth : (direction === 'left' ? -window.innerWidth : dx); // Keep vertical position for down swipe
-                         const offY = direction === 'down' ? window.innerHeight : dy; // Keep horizontal position for L/R swipes
-                         const finalRotate = dx * 0.1;
-
-                         swipeCard.style.transition = "transform 0.4s ease-out"; // Slightly faster exit
-                         swipeCard.style.transform = `translate(${offX}px, ${offY}px) rotate(${finalRotate}deg)`;
-
-                         // Wait for animation to be visible before submitting and redirecting/reloading
-                         setTimeout(() => submitAnnotation(direction), 200);
+                         triggerAction(direction); // Use the common trigger function
                      } else {
                          resetCardPosition();
                      }
                  }
 
-                 // --- Event Listeners (mousedown, mousemove, etc.) ---
-                if (swipeCard) { // Add checks
+                 // --- MOUSE/TOUCH Event Listeners (Mostly unchanged) ---
+                if (swipeCard) {
                     swipeCard.addEventListener('mousedown', e => {
-                        // Ignore clicks on buttons/links within card - check if target or ancestor is button/link
-                        if (e.target.closest('button, a')) return;
+                        if (e.target.closest('button, a') || actionInProgress) return;
                         isDragging = true;
                         startX = e.clientX;
                         startY = e.clientY;
-                        swipeCard.style.transition = ""; // Remove transition during drag
-                        e.preventDefault(); // Prevent text selection/image drag
+                        swipeCard.style.transition = "";
+                        e.preventDefault();
                     });
 
                      document.addEventListener('mousemove', e => {
-                         if (!isDragging) return;
+                         if (!isDragging || actionInProgress) return;
                          const dx = e.clientX - startX;
                          const dy = e.clientY - startY;
-                         setCardTransform(dx, dy);
+                         setCardTransform(dx, dy); // Pass dx/dy only
                      });
 
                      document.addEventListener('mouseup', e => {
-                         if (!isDragging) return;
+                         if (!isDragging || actionInProgress) return;
                          isDragging = false;
                          const dx = e.clientX - startX;
                          const dy = e.clientY - startY;
@@ -516,36 +566,62 @@
 
                      // Touch events
                      swipeCard.addEventListener('touchstart', e => {
-                         if (e.target.closest('button, a')) return;
-                         if (e.touches.length === 1) { // Single touch
+                         if (e.target.closest('button, a') || actionInProgress) return;
+                         if (e.touches.length === 1) {
                              isDragging = true;
                              startX = e.touches[0].clientX;
                              startY = e.touches[0].clientY;
                              swipeCard.style.transition = "";
-                             // e.preventDefault(); // Avoid preventDefault on touchstart if possible
                          }
-                     }, { passive: true }); // Use passive where possible
+                     }, { passive: true });
 
                      swipeCard.addEventListener('touchmove', e => {
-                         if (!isDragging || e.touches.length !== 1) return;
-                         // Only preventDefault if movement is significant enough to be a swipe drag
-                         // This allows some vertical scroll leniency on touch devices initially
+                         if (!isDragging || e.touches.length !== 1 || actionInProgress) return;
                          const dx = e.touches[0].clientX - startX;
                          const dy = e.touches[0].clientY - startY;
-                         if (Math.abs(dx) > 10 || Math.abs(dy) > 10) { // Threshold to prevent scroll hijack
+                         if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                              e.preventDefault();
                          }
-                         setCardTransform(dx, dy);
-                     }, { passive: false }); // Must be active to allow preventDefault
+                         setCardTransform(dx, dy); // Pass dx/dy only
+                     }, { passive: false });
 
                      swipeCard.addEventListener('touchend', e => {
-                         if (!isDragging || e.changedTouches.length !== 1) return;
+                         if (!isDragging || e.changedTouches.length !== 1 || actionInProgress) return;
                          isDragging = false;
                          const dx = e.changedTouches[0].clientX - startX;
                          const dy = e.changedTouches[0].clientY - startY;
                          handleSwipeEnd(dx, dy);
                      });
-                  } // End of if(swipeCard) block
+                  }
+
+                // --- NEW: KEYBOARD Event Listener ---
+                document.addEventListener('keydown', (e) => {
+                    if (actionInProgress) return; // Don't process keys if action is happening
+
+                    // Prevent interference if user is typing in a form field (future-proofing)
+                    const targetTagName = e.target.tagName.toLowerCase();
+                    if (targetTagName === 'input' || targetTagName === 'textarea' || targetTagName === 'select') {
+                        return;
+                    }
+
+                    let direction = null;
+                    switch (e.key) { // Use e.key for modern browsers
+                        case 'ArrowLeft':
+                            direction = 'left';
+                            break;
+                        case 'ArrowRight':
+                            direction = 'right';
+                            break;
+                        case 'ArrowDown':
+                            direction = 'down';
+                            break;
+                    }
+
+                    if (direction) {
+                        e.preventDefault(); // Prevent default arrow key behavior (scrolling)
+                        triggerAction(direction); // Use the common trigger function
+                    }
+                });
 
             }); // End DOMContentLoaded
         </script>
