@@ -1,16 +1,140 @@
-<h2>Choose a Folder to Annotate</h2>
-<ul>
-    {% for entry in folder_data %}
-        <li>
-            <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
-                {{ entry.folder.name }}
-            </a>
-            {% if entry.is_complete %}
-                ✅
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Choose Folder</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f7f9fb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .auth-bar {
+            text-align: right;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+
+        .auth-bar form {
+            display: inline;
+        }
+
+        .auth-bar button {
+            background: none;
+            border: none;
+            color: #007acc;
+            cursor: pointer;
+            font: inherit;
+            padding: 0;
+        }
+
+        ul.folder-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        ul.folder-list li {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        ul.folder-list li:last-child {
+            border-bottom: none;
+        }
+
+        .folder-actions a {
+            margin-left: 10px;
+            font-size: 0.95em;
+            text-decoration: none;
+            color: #007acc;
+        }
+
+        .upload-link {
+            display: inline-block;
+            margin-top: 20px;
+            font-size: 1em;
+            color: #fff;
+            background-color: #007acc;
+            padding: 10px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+
+        .upload-link:hover {
+            background-color: #005f99;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="auth-bar">
+            {% if user.is_authenticated %}
+                Welcome, {{ user.username }} |
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" style="background: none; border: none; color: #007acc; cursor: pointer; font: inherit; padding: 0;">Logout</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}">Login</a> |
+                <a href="{% url 'signup' %}">Sign Up</a>
             {% endif %}
-            |
-            <a href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
-        </li>
-    {% endfor %}
-</ul>
-<a href="{% url 'annotations_app:upload_zip' %}">Upload New Folder</a>
+        </div>
+
+        <h2>Choose a Folder to Annotate</h2>
+
+        <!-- {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            <style>
+                .messages { list-style: none; padding: 0; margin-bottom: 15px; }
+                .messages li.success { padding: 10px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; }
+                .messages li.error { padding: 10px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; }
+            </style>
+        {% endif %}
+ -->
+
+        <ul class="folder-list">
+            {% for entry in folder_data %}
+                <li>
+                    <span>
+                        <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
+                            {{ entry.folder.name }}
+                        </a>
+                        {% if entry.is_complete %} ✅ {% else %} ⏳ {% endif %}
+                        ({{ entry.annotated_count }}/{{ entry.total_proteins }})
+                    </span>
+                    <span class="folder-actions">
+                        <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
+                    </span>
+                </li>
+            {% empty %}
+                <li>No folders uploaded yet.</li>
+            {% endfor %}
+        </ul>
+
+        <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
+    </div>
+</body>
+</html>
