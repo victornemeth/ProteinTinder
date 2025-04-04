@@ -100,20 +100,21 @@
 
         <h2>Choose a Folder to Annotate</h2>
 
-        <ul class="folder-list">
-            {% for entry in folder_data %}
-                <li>
-                    <span>
-                        <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
-                            {{ entry.folder.name }}
-                        </a>
-                        {% if entry.is_complete %} ✅ {% endif %}
-                    </span>
-                    <span class="folder-actions">
-                        <a href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
-                    </span>
-                </li>
-            {% endfor %}
+<ul class="folder-list">
+    {% for entry in folder_data %}
+        <li>
+            <span>
+                <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
+                    {{ entry.folder.name }}
+                </a>
+                {% if entry.is_complete %} ✅ {% endif %}
+            </span>
+            <span class="folder-actions">
+                <a href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                <a href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
+            </span>
+        </li>
+    {% endfor %}
         </ul>
 
         <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
