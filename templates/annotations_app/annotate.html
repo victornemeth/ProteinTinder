@@ -173,8 +173,8 @@
             <p><strong>Name:</strong> {{ protein.name }}</p>
         {% endif %}
 
-        <div class="swipe-instruction">
-            👉 Swipe right = ✅ correct &nbsp;&nbsp;|&nbsp;&nbsp; 👈 left = ❌ wrong &nbsp;&nbsp;|&nbsp;&nbsp; 🔻 down = ❓ unsure
+<div class="swipe-instruction">
+            👉 Swipe right = ✅ correct   |   👈 left = ❌ wrong   |   🔻 down = ❓ unsure
         </div>
 
         <div class="card-stack">
@@ -182,12 +182,21 @@
                 <div class="card-feedback feedback-right" id="feedbackRight">✅</div>
                 <div class="card-feedback feedback-left" id="feedbackLeft">❌</div>
                 <div class="card-feedback feedback-down" id="feedbackDown">❓</div>
-                <div id="pdbViewer"><p class="info-message">Initializing 3D Viewer...</p></div>
+                <div id="pdbViewer">
+                    {% if cleaned_pdb_path %}
+                    <p class="info-message">Initializing 3D Viewer...</p>
+                    {% else %}
+                    <p class="error-message">Could not load PDB file path.</p>
+                    {% endif %}
+                </div>
             </div>
             <div class="card" style="z-index: -1; background-color: #f0f0f0;"></div>
         </div>
 
         <button class="undo-button" id="undoBtn">↩️ Undo Last Annotation</button>
+         <!-- Add a link back to the overview -->
+         <a href="{% url 'annotations_app:annotation_overview' folder_id=folder.id %}" style="margin-left: 10px; font-size: 0.9em;">Back to Overview</a>
+
 
         <script>
             document.addEventListener("DOMContentLoaded", function () {
@@ -200,168 +209,261 @@
                 const feedbackDown = document.getElementById("feedbackDown");
 
                 const proteinId = "{{ protein.protein_id|escapejs }}";
-                const folderId = "{{ protein.folder.id|escapejs }}";
-                const pdbFilename = "{{ protein.pdb_file_path|escapejs }}";
+                const proteinPk = "{{ protein.pk|escapejs }}"; // Use PK if needed elsewhere
+                const folderId = "{{ folder.id|escapejs }}"; // Get from folder object
+                // Use the cleaned path passed from the view
+                const pdbFilename = "{{ cleaned_pdb_path|escapejs }}";
                 const mediaUrl = "{{ media_url|escapejs }}";
-                const fileUrl = mediaUrl + pdbFilename;
+                const fileUrl = pdbFilename ? mediaUrl + pdbFilename : null; // Handle null path
 
-                const viewer = $3Dmol.createViewer(viewerElement, {
-                    defaultcolors: $3Dmol.elementColors.rasmol,
-                    backgroundColor: 'white',
-                });
+                const isSpecificRedo = {{ is_specific_redo|yesno:"true,false" }}; // Get flag
 
-                function animateRotation() {
-                    viewer.rotate(1);
-                    viewer.render();
-                    requestAnimationFrame(animateRotation);
+                // Only initialize viewer if we have a valid file path
+                if (fileUrl) {
+                    const viewer = $3Dmol.createViewer(viewerElement, {
+                        defaultcolors: $3Dmol.elementColors.rasmol,
+                        backgroundColor: 'white',
+                    });
+
+                    function animateRotation() {
+                        if (viewer && viewer.rotate) { // Check if viewer exists and has rotate method
+                           viewer.rotate(1);
+                           viewer.render();
+                           requestAnimationFrame(animateRotation);
+                        }
+                    }
+
+                    const fileFormat = (() => {
+                        if (!pdbFilename) return 'pdb'; // Default if no filename
+                        let ext = pdbFilename.split('.').pop().toLowerCase();
+                        return ext === 'ent' ? 'pdb' : (['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb');
+                    })();
+
+                    $3Dmol.download(fileUrl, viewer, { format: fileFormat })
+                        .then(() => {
+                            viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                            viewer.zoomTo();
+                            viewer.render();
+                            // Only start animation if download succeeds
+                            // requestAnimationFrame(animateRotation); // Consider if animation is desired
+                            viewer.zoom(1.5); // Static zoom might be better than constant rotation
+                            viewer.render();
+
+                        })
+                        .catch(error => {
+                            viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
+                            console.error("3Dmol download error:", error);
+                        });
+                } else if (!document.querySelector('.error-message')) {
+                     viewerElement.innerHTML = `<p class='error-message'>PDB file path not available.</p>`;
                 }
 
-                const fileFormat = (() => {
-                    let ext = pdbFilename.split('.').pop().toLowerCase();
-                    return ext === 'ent' ? 'pdb' : (['pdb', 'cif', 'mol2', 'sdf'].includes(ext) ? ext : 'pdb');
-                })();
-
-                $3Dmol.download(fileUrl, viewer, { format: fileFormat })
-                    .then(() => {
-                        viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
-                        viewer.zoomTo();
-                        viewer.render();
-                        animateRotation();
-                    })
-                    .catch(error => {
-                        viewerElement.innerHTML = `<p class='error-message'>Error loading structure:<br>${error}</p>`;
-                    });
 
                 function submitAnnotation(direction) {
                     const emoji = direction === 'right' ? '✅' : direction === 'left' ? '❌' : '❓';
-                    viewerElement.innerHTML = `<p class='info-message'>${emoji} Annotated as ${direction.toUpperCase()}</p>`;
+                    if(viewerElement) { // Ensure viewer element exists before modifying
+                       viewerElement.innerHTML = `<p class='info-message'>${emoji} Annotated as ${direction.toUpperCase()}. Saving...</p>`;
+                    }
 
-                    fetch("{% url 'annotations_app:annotate' %}", {
+                    fetch("{% url 'annotations_app:annotate' %}", { // Or use 'annotate/submit/' if you changed the URL
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            "X-CSRFToken": "{{ csrf_token }}"
+                            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : "{{ csrf_token }}" // More robust CSRF token retrieval
                         },
                         body: JSON.stringify({
-                            protein_id: proteinId,
+                            protein_id: proteinId, // Keep sending protein_id (the string identifier)
                             folder_id: folderId,
                             annotation: direction
                         })
-                    }).then(() => setTimeout(() => window.location.reload(), 500));
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                         if (data.success) {
+                            // --- REDIRECT LOGIC ---
+                            if (isSpecificRedo) {
+                                // If we re-annotated a specific protein, go back to the overview
+                                window.location.href = "{% url 'annotations_app:annotation_overview' folder_id=folder.id %}";
+                            } else {
+                                // Otherwise, load the next protein (reload the default annotation view)
+                                window.location.reload();
+                            }
+                         } else {
+                             throw new Error(data.error || "Annotation submission failed.");
+                         }
+                    })
+                    .catch(error => {
+                        console.error("Submit annotation error:", error);
+                        if(viewerElement) {
+                             viewerElement.innerHTML = `<p class='error-message'>Failed to save annotation: ${error}. Please try again.</p>`;
+                        }
+                        // Optionally reset the card after a delay on error
+                        // setTimeout(resetCardPosition, 1500);
+                    });
                 }
 
-                undoButton.addEventListener("click", () => {
-                    fetch("{% url 'annotations_app:undo' %}", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRFToken": "{{ csrf_token }}"
-                        }
-                    }).then(response => response.json())
-                      .then(data => {
-                          if (data.success) location.reload();
-                          else alert("Undo failed: " + data.error);
-                      });
-                });
+                // --- UNDO BUTTON ---
+                if (undoButton) { // Check if button exists
+                    undoButton.addEventListener("click", () => {
+                        fetch("{% url 'annotations_app:undo' %}", { // Or 'annotate/undo/'
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : "{{ csrf_token }}"
+                            }
+                        }).then(response => response.json())
+                          .then(data => {
+                              if (data.success) {
+                                // Reloading is usually fine for undo, takes you to the undone item
+                                window.location.reload();
+                              } else {
+                                alert("Undo failed: " + (data.error || "Unknown error"));
+                             }
+                          })
+                          .catch(error => {
+                              console.error("Undo error:", error);
+                              alert("Undo request failed.");
+                          });
+                    });
+                }
 
-                let startX, startY, isDragging = false;
+
+                // --- SWIPE LOGIC --- (Keep existing swipe logic: startX, startY, isDragging, etc.)
+                 let startX, startY, isDragging = false;
 
                 function getSwipeDirection(dx, dy) {
-                    const minDistance = 150;
-                    if (Math.abs(dx) > Math.abs(dy)) {
+                    const minDistance = 100; // Adjusted sensitivity slightly
+                    const verticalThreshold = 1.5; // Make it harder to swipe down accidentally
+
+                    if (Math.abs(dx) > Math.abs(dy) * verticalThreshold) { // Require more horizontal movement
                         if (dx > minDistance) return 'right';
                         if (dx < -minDistance) return 'left';
-                    } else if (dy > minDistance) return 'down';
+                    } else if (dy > Math.abs(dx) && dy > minDistance) { // Ensure downward movement is dominant and passes threshold
+                         return 'down';
+                    }
                     return null;
                 }
 
-                function setCardTransform(dx, dy) {
-                    const rotate = dx * 0.05;
-                    swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
+                 function setCardTransform(dx, dy) {
+                     if (!swipeCard) return; // Check card exists
+                     const rotate = dx * 0.05;
+                     swipeCard.style.transform = `translate(${dx}px, ${dy}px) rotate(${rotate}deg)`;
 
-                    swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
-                    feedbackRight.style.opacity = dx > 100 ? '1' : '0';
-                    feedbackLeft.style.opacity = dx < -100 ? '1' : '0';
-                    feedbackDown.style.opacity = dy > 100 ? '1' : '0';
+                     const glowThreshold = 80; // When to start showing glow/feedback
 
-                    if (dx > 100) swipeCard.classList.add("glow-right");
-                    else if (dx < -100) swipeCard.classList.add("glow-left");
-                    else if (dy > 100) swipeCard.classList.add("glow-down");
-                }
+                     swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
+                     if (feedbackRight) feedbackRight.style.opacity = dx > glowThreshold ? '1' : '0';
+                     if (feedbackLeft) feedbackLeft.style.opacity = dx < -glowThreshold ? '1' : '0';
+                     if (feedbackDown) feedbackDown.style.opacity = dy > glowThreshold && Math.abs(dx) < dy ? '1' : '0'; // Prefer down if mostly vertical
 
-                function resetCardPosition() {
-                    swipeCard.style.transition = "transform 0.3s ease-out";
-                    swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
-                    swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
-                    feedbackRight.style.opacity = '0';
-                    feedbackLeft.style.opacity = '0';
-                    feedbackDown.style.opacity = '0';
-                    setTimeout(() => swipeCard.style.transition = "", 300);
-                }
+                     if (dx > glowThreshold) swipeCard.classList.add("glow-right");
+                     else if (dx < -glowThreshold) swipeCard.classList.add("glow-left");
+                     else if (dy > glowThreshold && Math.abs(dx) < dy) swipeCard.classList.add("glow-down");
+                 }
 
-                function handleSwipeEnd(dx, dy) {
-                    const direction = getSwipeDirection(dx, dy);
-                    if (direction) {
-                        const offX = dx > 0 ? window.innerWidth : -window.innerWidth;
-                        const offY = dy > 0 ? window.innerHeight : -window.innerHeight;
-                        swipeCard.style.transition = "transform 0.5s ease-out";
-                        swipeCard.style.transform = `translate(${offX}px, ${offY}px) rotate(${dx * 0.1}deg)`;
-                        setTimeout(() => submitAnnotation(direction), 300);
-                    } else {
-                        resetCardPosition();
-                    }
-                }
+                 function resetCardPosition() {
+                     if (!swipeCard) return;
+                     swipeCard.style.transition = "transform 0.3s ease-out";
+                     swipeCard.style.transform = `translate(0, 0) rotate(0deg)`;
+                     swipeCard.classList.remove("glow-left", "glow-right", "glow-down");
+                     if (feedbackRight) feedbackRight.style.opacity = '0';
+                     if (feedbackLeft) feedbackLeft.style.opacity = '0';
+                     if (feedbackDown) feedbackDown.style.opacity = '0';
+                     // Clear transition after it finishes
+                     setTimeout(() => {
+                        if (swipeCard) swipeCard.style.transition = "";
+                     }, 300);
+                 }
 
-                swipeCard.addEventListener('mousedown', e => {
-                    isDragging = true;
-                    startX = e.clientX;
-                    startY = e.clientY;
-                });
+                 function handleSwipeEnd(dx, dy) {
+                     if (!swipeCard) return;
+                     const direction = getSwipeDirection(dx, dy);
+                     if (direction) {
+                         // Animate card off screen before submitting
+                         const offX = direction === 'right' ? window.innerWidth : (direction === 'left' ? -window.innerWidth : dx); // Keep vertical position for down swipe
+                         const offY = direction === 'down' ? window.innerHeight : dy;
+                         const finalRotate = dx * 0.1;
 
-                document.addEventListener('mousemove', e => {
-                    if (!isDragging) return;
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-                    setCardTransform(dx, dy);
-                });
+                         swipeCard.style.transition = "transform 0.4s ease-out"; // Slightly faster exit
+                         swipeCard.style.transform = `translate(${offX}px, ${offY}px) rotate(${finalRotate}deg)`;
 
-                document.addEventListener('mouseup', e => {
-                    if (!isDragging) return;
-                    isDragging = false;
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
-                    handleSwipeEnd(dx, dy);
-                });
+                         // Wait for animation to be visible before submitting and redirecting/reloading
+                         setTimeout(() => submitAnnotation(direction), 200);
+                     } else {
+                         resetCardPosition();
+                     }
+                 }
 
-                swipeCard.addEventListener('touchstart', e => {
-                    isDragging = true;
-                    startX = e.touches[0].clientX;
-                    startY = e.touches[0].clientY;
-                });
+                 // --- Event Listeners (mousedown, mousemove, etc.) ---
+                if (swipeCard) { // Add checks
+                    swipeCard.addEventListener('mousedown', e => {
+                        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return; // Ignore clicks on buttons/links within card
+                        isDragging = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        swipeCard.style.transition = ""; // Remove transition during drag
+                        e.preventDefault(); // Prevent text selection/image drag
+                    });
 
-                swipeCard.addEventListener('touchmove', e => {
-                    if (!isDragging) return;
-                    const dx = e.touches[0].clientX - startX;
-                    const dy = e.touches[0].clientY - startY;
-                    setCardTransform(dx, dy);
-                });
+                     document.addEventListener('mousemove', e => {
+                         if (!isDragging) return;
+                         const dx = e.clientX - startX;
+                         const dy = e.clientY - startY;
+                         setCardTransform(dx, dy);
+                     });
 
-                swipeCard.addEventListener('touchend', e => {
-                    if (!isDragging) return;
-                    isDragging = false;
-                    const dx = e.changedTouches[0].clientX - startX;
-                    const dy = e.changedTouches[0].clientY - startY;
-                    handleSwipeEnd(dx, dy);
-                });
-            });
+                     document.addEventListener('mouseup', e => {
+                         if (!isDragging) return;
+                         isDragging = false;
+                         const dx = e.clientX - startX;
+                         const dy = e.clientY - startY;
+                         handleSwipeEnd(dx, dy);
+                     });
+
+                     // Touch events
+                     swipeCard.addEventListener('touchstart', e => {
+                         if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+                         if (e.touches.length === 1) { // Single touch
+                             isDragging = true;
+                             startX = e.touches[0].clientX;
+                             startY = e.touches[0].clientY;
+                             swipeCard.style.transition = "";
+                             // e.preventDefault(); // Be careful with touch preventDefault, might block scrolling if needed elsewhere
+                         }
+                     }, { passive: true }); // Use passive where possible
+
+                     swipeCard.addEventListener('touchmove', e => {
+                         if (!isDragging || e.touches.length !== 1) return;
+                         // e.preventDefault(); // Prevent scrolling while swiping card
+                         const dx = e.touches[0].clientX - startX;
+                         const dy = e.touches[0].clientY - startY;
+                         setCardTransform(dx, dy);
+                     }); // Removed passive:true as we might need preventDefault
+
+                     swipeCard.addEventListener('touchend', e => {
+                         if (!isDragging || e.changedTouches.length !== 1) return;
+                         isDragging = false;
+                         const dx = e.changedTouches[0].clientX - startX;
+                         const dy = e.changedTouches[0].clientY - startY;
+                         handleSwipeEnd(dx, dy);
+                     });
+                  } // End of if(swipeCard) block
+
+            }); // End DOMContentLoaded
         </script>
     {% else %}
         <p class="info-message">No protein available for annotation or protein could not be loaded.</p>
+        <a href="{% url 'annotations_app:view_folders' %}">Back to Folder List</a>
     {% endif %}
 
     <hr>
     <footer>
-        <p><small>Annotation Tool &copy; 2025</small></p>
+        <p><small>Annotation Tool © 2025</small></p>
     </footer>
 </div>
 </body>
