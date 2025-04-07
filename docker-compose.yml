@@ -24,6 +24,7 @@ services:
              echo 'DB Ready.' &&
              python manage.py makemigrations annotations_app --noinput &&
              python manage.py migrate --noinput &&
+             python create_superuser.py &&
              python manage.py runserver 0.0.0.0:8000
              "
     volumes:

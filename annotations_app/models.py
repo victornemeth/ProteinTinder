@@ -15,7 +15,7 @@ class ProteinFolder(models.Model):
 
 
 class Protein(models.Model):
-    protein_id = models.CharField(max_length=50)
+    protein_id = models.CharField(max_length=100)
     name = models.CharField(max_length=255, blank=True, null=True)
     pdb_file_path = models.CharField(max_length=500, blank=True, null=True)
     folder = models.ForeignKey(ProteinFolder, on_delete=models.CASCADE, related_name='proteins')
