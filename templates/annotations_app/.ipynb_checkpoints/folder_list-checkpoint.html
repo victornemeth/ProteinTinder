@@ -2,128 +2,296 @@
 <html>
 <head>
     <title>Choose Folder</title>
+    <!-- Add viewport meta tag for responsive behaviour -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        /* --- Base Styles (PC / Default) --- */
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #f7f9fb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; /* System font stack */
+            background-color: #f8f9fa; /* Lighter gray */
+            color: #343a40; /* Darker text */
             margin: 0;
             padding: 0;
+            line-height: 1.6; /* Improve readability */
         }
 
         .container {
             max-width: 800px;
             margin: 40px auto;
-            padding: 20px;
+            padding: 25px 30px; /* Slightly more padding */
             background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 10px; /* Slightly less rounded */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07); /* Softer shadow */
+            border: 1px solid #dee2e6; /* Subtle border */
         }
 
         h2 {
             text-align: center;
             margin-bottom: 30px;
+            color: #212529; /* Even darker for heading */
+            font-weight: 600;
         }
 
         .auth-bar {
             text-align: right;
-            margin-bottom: 20px;
-            font-size: 0.95em;
+            margin-bottom: 25px;
+            font-size: 0.9em; /* Slightly smaller */
+            color: #6c757d; /* Muted color */
+        }
+
+        .auth-bar a,
+        .auth-bar button {
+            color: #007bff; /* Standard blue link */
+            text-decoration: none;
+            margin-left: 5px;
+            margin-right: 5px;
+        }
+         .auth-bar button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font: inherit;
+            padding: 0;
+            vertical-align: baseline; /* Align with text */
+        }
+        .auth-bar a:hover,
+        .auth-bar button:hover {
+            text-decoration: underline;
         }
 
         .auth-bar form {
             display: inline;
         }
 
-        .auth-bar button {
-            background: none;
-            border: none;
-            color: #007acc;
-            cursor: pointer;
-            font: inherit;
-            padding: 0;
-        }
-
         ul.folder-list {
             list-style: none;
             padding-left: 0;
+            margin-top: 20px; /* Space above list */
         }
 
         ul.folder-list li {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
+            padding: 15px 10px; /* More vertical padding */
+            border-bottom: 1px solid #e9ecef; /* Lighter separator */
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.15s ease-in-out;
         }
+         ul.folder-list li:hover {
+             background-color: #f8f9fa; /* Subtle hover */
+         }
 
         ul.folder-list li:last-child {
             border-bottom: none;
         }
 
-        .folder-actions a {
-            margin-left: 10px;
-            font-size: 0.95em;
+        /* Folder name, status, count */
+        .folder-info {
+             font-weight: 500;
+             color: #495057;
+        }
+        .folder-info a {
+            color: #0056b3; /* Darker blue for main link */
             text-decoration: none;
-            color: #007acc;
+            font-weight: 600; /* Make name stand out */
+        }
+         .folder-info a:hover {
+             text-decoration: underline;
+         }
+         .folder-info span.status-count {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-left: 8px;
+         }
+          .folder-info span.status-count .emoji {
+             font-size: 1.1em; /* Make emoji slightly larger */
+             vertical-align: middle;
+          }
+
+        /* Action links container */
+        .folder-actions {
+            white-space: nowrap; /* Prevent actions wrapping on slightly narrow PC view */
         }
 
-        .upload-link {
+        .folder-actions a.action-link { /* Renamed class */
+            margin-left: 12px; /* More space between actions */
+            font-size: 0.85em; /* Smaller action links */
+            text-decoration: none;
+            color: #007bff;
+            padding: 4px 8px; /* Add padding for better click area (optional) */
+            border-radius: 4px; /* Add radius (optional) */
+            transition: background-color 0.2s ease;
+        }
+         .folder-actions a.action-link:hover {
+            background-color: #e7f3ff; /* Light blue background on hover */
+            text-decoration: none; /* Remove underline on hover if bg is added */
+         }
+
+        /* Upload link button */
+        .upload-link-container {
+             text-align: center; /* Center the button */
+             margin-top: 30px;
+        }
+        a.upload-link {
             display: inline-block;
-            margin-top: 20px;
             font-size: 1em;
             color: #fff;
-            background-color: #007acc;
-            padding: 10px 16px;
+            background-color: #28a745; /* Green for upload */
+            padding: 10px 20px;
             border-radius: 6px;
             text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            font-weight: 500;
         }
 
-        .upload-link:hover {
-            background-color: #005f99;
+        a.upload-link:hover {
+            background-color: #218838; /* Darker green */
         }
+
+        /* Message Styling (Uncommented and improved) */
+         .messages { list-style: none; padding: 0; margin: 20px 0; }
+         .messages li { padding: 12px 15px; border-radius: 5px; margin-bottom: 10px; }
+         .messages li.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+         .messages li.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+         .messages li.info { background-color: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+         .messages li.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+
+
+        /* --- Mobile Styles (Applied when screen width is <= 767px) --- */
+        @media (max-width: 767px) {
+            body {
+                padding: 0; /* Remove body padding on mobile */
+            }
+
+            .container {
+                max-width: 100%; /* Use full width */
+                margin: 0; /* Remove margin */
+                padding: 15px; /* Reduce padding */
+                border-radius: 0; /* No border radius */
+                border: none; /* No border */
+                box-shadow: none; /* No shadow */
+            }
+
+            h2 {
+                font-size: 1.5em; /* Smaller heading */
+                margin-bottom: 20px;
+            }
+
+            .auth-bar {
+                text-align: center; /* Center auth links */
+                margin-bottom: 20px;
+                font-size: 0.85em;
+            }
+             .auth-bar span, .auth-bar form { /* Ensure elements stack nicely if needed */
+                display: block;
+                margin-bottom: 5px;
+             }
+             .auth-bar span:last-child, .auth-bar form:last-child {
+                 margin-bottom: 0;
+             }
+
+
+            ul.folder-list li {
+                display: block; /* Stack elements vertically */
+                padding: 12px 5px; /* Adjust padding */
+            }
+
+            .folder-info {
+                display: block; /* Ensure it takes full width */
+                margin-bottom: 10px; /* Space below folder info */
+                 font-size: 1.1em; /* Slightly larger main text */
+            }
+             .folder-info a {
+                font-weight: 600; /* Keep name bold */
+             }
+             .folder-info span.status-count {
+                display: block; /* Put status/count on new line */
+                margin-left: 0; /* Reset margin */
+                margin-top: 5px; /* Space above status */
+                font-size: 0.9em;
+            }
+
+
+            .folder-actions {
+                display: block; /* Stack actions */
+                margin-top: 10px; /* Space above actions */
+                 border-top: 1px solid #eee; /* Separator line */
+                 padding-top: 10px; /* Space above first action */
+            }
+
+            .folder-actions a.action-link {
+                display: block; /* Make links full width */
+                margin: 8px 0; /* Vertical space between actions */
+                padding: 8px 5px; /* More vertical padding for tapping */
+                text-align: center; /* Center text in link */
+                background-color: #f1f1f1; /* Give actions a button-like background */
+                border-radius: 5px;
+                font-size: 0.9em;
+                color: #333; /* Darker color for contrast */
+                font-weight: 500;
+            }
+             .folder-actions a.action-link:hover {
+                background-color: #e0e0e0; /* Darker hover */
+             }
+
+            .upload-link-container {
+                margin-top: 25px;
+            }
+
+            a.upload-link {
+                display: block; /* Full width button */
+                width: 95%; /* Slightly less than 100% */
+                margin-left: auto;
+                margin-right: auto;
+                padding: 12px 15px; /* Adjust padding */
+                font-size: 1.05em; /* Slightly larger font */
+            }
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
         <div class="auth-bar">
             {% if user.is_authenticated %}
-                Welcome, {{ user.username }} |
+                 {# Wrap in spans for better mobile layout control if needed #}
+                 <span>Welcome, {{ user.username }}</span> |
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
-                    <button type="submit" style="background: none; border: none; color: #007acc; cursor: pointer; font: inherit; padding: 0;">Logout</button>
+                    <button type="submit">Logout</button>
                 </form>
             {% else %}
-                <a href="{% url 'login' %}">Login</a> |
-                <a href="{% url 'signup' %}">Sign Up</a>
+                <span><a href="{% url 'login' %}">Login</a></span> |
+                <span><a href="{% url 'signup' %}">Sign Up</a></span>
             {% endif %}
         </div>
 
         <h2>Choose a Folder to Annotate</h2>
 
-        <!-- {% if messages %}
+         {% if messages %}
             <ul class="messages">
                 {% for message in messages %}
                     <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
                 {% endfor %}
             </ul>
-            <style>
-                .messages { list-style: none; padding: 0; margin-bottom: 15px; }
-                .messages li.success { padding: 10px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; }
-                .messages li.error { padding: 10px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; }
-            </style>
         {% endif %}
- -->
 
         <ul class="folder-list">
             {% for entry in folder_data %}
                 <li>
-                    <span>
+                    {# Grouped folder name/status/count #}
+                    <span class="folder-info">
                         <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
                             {{ entry.folder.name }}
                         </a>
-                        {% if entry.is_complete %} ✅ {% else %} ⏳ {% endif %}
-                        ({{ entry.annotated_count }}/{{ entry.total_proteins }})
+                        <span class="status-count">
+                             <span class="emoji">{% if entry.is_complete %} ✅ {% else %} ⏳ {% endif %}</span>
+                             ({{ entry.annotated_count }}/{{ entry.total_proteins }})
+                         </span>
                     </span>
+                    {# Grouped actions #}
                     <span class="folder-actions">
                         <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
                         <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
@@ -134,7 +302,9 @@
             {% endfor %}
         </ul>
 
-        <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
+        <div class="upload-link-container">
+             <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
+         </div>
     </div>
 </body>
 </html>
