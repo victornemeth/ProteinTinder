@@ -181,7 +181,6 @@ def annotate_protein_view(request, folder_id, protein_pk=None): # Add protein_pk
     return render(request, 'annotations_app/annotate.html', context)
 
 
-@csrf_exempt
 @login_required
 def submit_annotation(request):
     try:
