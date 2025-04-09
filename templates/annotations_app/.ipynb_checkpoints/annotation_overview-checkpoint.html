@@ -4,7 +4,7 @@
 <head>
     <title>Annotation Overview: {{ folder.name }}</title>
     <style>
-        /* Basic styling */
+        /* Basic styling (keep existing) */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             padding: 20px;
@@ -12,7 +12,7 @@
             color: #343a40;
         }
         .container {
-            max-width: 1100px; /* Wider for grid */
+            max-width: 1100px; /* Adjusted for potential 4-column grid for 16 items */
             margin: auto;
             background-color: #fff;
             padding: 20px 30px;
@@ -29,115 +29,125 @@
          p strong { font-weight: 600; }
 
         .annotation-group {
-            margin-top: 35px;
+            margin-top: 25px; /* Reduced margin slightly */
         }
         .annotation-group h3 {
             margin-bottom: 15px;
             color: #495057;
             font-size: 1.4em;
             font-weight: 500;
+            /* display: none; */ /* Option: Hide headers when filtering? Start without */
+        }
+        .annotation-group.group-hidden { /* Class to hide group if filter excludes it */
+             /* display: none; */ /* Let's hide cards individually instead */
         }
 
+
         /* --- Grid Layout --- */
+        /* We need one conceptual grid, cards will be shown/hidden by JS */
+        /* The underlying HTML structure can still group them */
         .protein-grid {
             display: grid;
-            /* Responsive columns: min 160px, max 1fr (equal share) */
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 20px; /* Spacing between cards */
+             /* Let's aim for 4 columns roughly for 16 cards */
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Wider min */
+            gap: 20px;
         }
 
         /* --- Card Styling --- */
-        .protein-card {
+        .protein-card-item {
             border: 1px solid #dee2e6;
             border-radius: 6px;
             background-color: #fff;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            overflow: hidden; /* Clip content to border-radius */
-            display: flex;
-            flex-direction: column; /* Stack viewer and info */
+            overflow: hidden;
+            display: none; /* Initially hide ALL cards */
+            flex-direction: column;
             transition: box-shadow 0.2s ease-in-out;
         }
-        .protein-card:hover {
+        .protein-card-item:hover {
              box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
-        .viewer-container {
-            width: 100%;
-            height: 130px; /* Adjust height of viewer area */
-            background-color: #f0f0f0; /* Loading bg */
-            position: relative; /* For 3Dmol positioning */
-            display: flex; /* For centering loading/error text */
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8em;
-            color: #6c757d;
-        }
-        .viewer-container .load-error { /* Style error messages inside viewer */
-            color: #dc3545;
-            font-weight: 500;
-            padding: 5px;
-            background-color: rgba(255, 255, 255, 0.8);
-            border-radius: 3px;
-        }
+        /* Viewer, Card Info, Links styles (keep existing) */
+        .viewer-container { width: 100%; height: 150px; /* Slightly taller */ background-color: #f0f0f0; position: relative; display: flex; align-items: center; justify-content: center; font-size: 0.8em; color: #6c757d; }
+        .viewer-container .load-error { color: #dc3545; font-weight: 500; padding: 5px; background-color: rgba(255, 255, 255, 0.8); border-radius: 3px; }
+        .card-info { padding: 12px; text-align: center; border-top: 1px solid #eee; background-color: #fdfdfd; }
+        .protein-id { display: block; font-size: 0.9em; font-weight: 500; color: #343a40; margin-bottom: 8px; word-break: break-all; }
+        .action-link { font-size: 0.85em; color: #007bff; text-decoration: none; padding: 4px 8px; border-radius: 4px; background-color: transparent; transition: background-color 0.2s ease; }
+        .action-link:hover { text-decoration: underline; background-color: #e7f3ff; }
+        .start-annotating-link { margin-top: 10px; display: inline-block; font-size: 1em; padding: 8px 15px; color: #fff; background-color: #007bff; border-radius: 5px; text-decoration: none; }
+         .start-annotating-link:hover { background-color: #0056b3; text-decoration: none; }
+        .back-link { margin-bottom: 20px; display: inline-block; color: #6c757d; text-decoration: none; font-size: 0.9em; }
+        .back-link:hover { text-decoration: underline; }
+        .empty-list-message { color: #6c757d; font-style: italic; padding: 15px 0; text-align: center; font-size: 0.95em; }
 
-
-        .card-info {
-            padding: 12px;
-            text-align: center;
-            border-top: 1px solid #eee; /* Separator line */
-            background-color: #fdfdfd; /* Slightly off-white bg */
+        /* --- Filter Controls Styling --- */
+        .filter-controls {
+            margin: 20px 0;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            text-align: center; /* Center buttons */
         }
-        .protein-id {
-            display: block;
-            font-size: 0.9em;
-            font-weight: 500;
-            color: #343a40;
-            margin-bottom: 8px;
-            word-break: break-all; /* Prevent long IDs breaking layout */
-        }
-        .action-link { /* Link style inside card */
-            font-size: 0.85em;
-            color: #007bff;
-            text-decoration: none;
-            padding: 4px 8px;
+        .filter-controls button {
+            background-color: #e9ecef;
+            color: #495057;
+            border: 1px solid #ced4da;
+            padding: 6px 15px; /* More padding */
             border-radius: 4px;
-            background-color: transparent; /* Remove button-like bg */
+            cursor: pointer;
+            margin: 0 4px;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .filter-controls button:hover {
+            background-color: #dee2e6;
+            border-color: #adb5bd;
+        }
+        .filter-controls button.active { /* Style for the active filter */
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            font-weight: 500;
+        }
+
+        /* --- Global Pagination Controls Styling --- */
+        .global-pagination-controls {
+            text-align: center;
+            margin: 25px 0 15px 0; /* Space around */
+            padding: 10px 0;
+            font-size: 0.9em;
+            display: none; /* Hide initially */
+        }
+        .global-pagination-controls button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
             transition: background-color 0.2s ease;
         }
-        .action-link:hover {
-            text-decoration: underline;
-            background-color: #e7f3ff; /* Light bg on hover */
+        .global-pagination-controls button:hover:not(:disabled) {
+            background-color: #0056b3;
         }
-        .start-annotating-link { /* Style for the main start button if no annotations */
-             margin-top: 10px;
-             display: inline-block;
-             font-size: 1em;
-             padding: 8px 15px;
-             color: #fff;
-             background-color: #007bff;
-             border-radius: 5px;
-             text-decoration: none; /* Ensure no underline */
-         }
-         .start-annotating-link:hover {
-             background-color: #0056b3;
-             text-decoration: none;
-         }
-
-        .back-link {
-            margin-bottom: 20px;
+        .global-pagination-controls button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .global-pagination-controls .page-info {
             display: inline-block;
-            color: #6c757d;
-            text-decoration: none;
-            font-size: 0.9em;
+            margin: 0 15px;
+            color: #495057;
         }
-        .back-link:hover { text-decoration: underline; }
-        .empty-list-message {
-            color: #6c757d;
-            font-style: italic;
-            padding: 15px 0;
-            text-align: center;
-            font-size: 0.95em;
+        #no-results-message {
+             display: none; /* Hidden initially */
+             text-align: center;
+             margin-top: 20px;
+             color: #6c757d;
+             font-style: italic;
         }
+
     </style>
     <!-- Include 3Dmol.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
@@ -149,45 +159,67 @@
         <p><strong>Title:</strong> {{ folder.title }}</p>
         <p><strong>Description:</strong> {{ folder.description }}</p>
 
-        {# Regroup the flat annotations list passed from the view #}
-        {% regroup annotations by given_annotation as grouped_annotations_list %}
+        {% if annotations %} {# Only show filters/cards if there ARE annotations #}
+            <!-- Filter Controls -->
+            <div class="filter-controls">
+                <button data-filter="all" class="active">All</button>
+                <button data-filter="correct">Correct</button>
+                <button data-filter="wrong">Wrong</button>
+                <button data-filter="unsure">Unsure</button>
+            </div>
 
-        {% for group in grouped_annotations_list %}
-            <div class="annotation-group">
-                <h3>
-                    {# Display group name based on the key #}
-                    {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}
-                    ({{ group.list|length }})
-                </h3>
+            <!-- Card Area -->
+            <div id="card-display-area">
+                {# Regroup the flat annotations list passed from the view #}
+                {% regroup annotations by given_annotation as grouped_annotations_list %}
 
-                {% if group.list %}
-                    <div class="protein-grid">
-                        {# Iterate through annotations in the current group #}
-                        {% for annotation in group.list %}
-                            {% with protein=annotation.protein %} {# Access protein via annotation #}
-                            <div class="protein-card">
-                                {# Container for the 3Dmol viewer #}
-                                <div class="viewer-container" id="viewer-{{ protein.id }}">
-                                    {% if protein.pdb_file_path %}Loading...{% else %}No Path{% endif %}
-                                </div>
-                                {# Info below the viewer #}
-                                <div class="card-info">
-                                    <span class="protein-id">{{ protein.protein_id }}</span>
-                                    <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}" class="action-link">Re-annotate</a>
-                                </div>
-                            </div>
-                            {% endwith %}
-                        {% endfor %}
-                    </div>
-                {% else %}
-                     {# Message if no proteins in this group #}
-                     <p class="empty-list-message">No proteins annotated as {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}.</p>
-                {% endif %}
-            </div> {# End annotation-group #}
-        {% endfor %}
+                {% for group in grouped_annotations_list %}
+                    <div class="annotation-group" data-group-container="{{ group.grouper }}">
+                        {# Keep the H3 headers for context #}
+                        <h3>
+                            {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}
+                            ({{ group.list|length }})
+                        </h3>
 
-        {# Handle case where there are NO annotations at all for this user/folder #}
-        {% if not annotations %}
+                        {% if group.list %}
+                             {# Wrap cards in a grid, but pagination controls are outside #}
+                            <div class="protein-grid">
+                                {# Iterate through annotations in the current group #}
+                                {% for annotation in group.list %}
+                                    {% with protein=annotation.protein %}
+                                    {# Add data-group and common class 'protein-card-item' #}
+                                    <div class="protein-card-item" data-group="{{ group.grouper }}">
+                                        <div class="viewer-container" id="viewer-{{ protein.id }}">
+                                            {% if protein.pdb_file_path %}Loading...{% else %}No Path{% endif %}
+                                        </div>
+                                        <div class="card-info">
+                                            <span class="protein-id">{{ protein.protein_id }}</span>
+                                            <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}" class="action-link">Re-annotate</a>
+                                        </div>
+                                    </div>
+                                    {% endwith %}
+                                {% endfor %}
+                             </div> {# End protein-grid #}
+                        {% else %}
+                             <p class="empty-list-message">No proteins annotated as {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}.</p>
+                        {% endif %}
+                    </div> {# End annotation-group #}
+                {% endfor %}
+            </div> {# End card-display-area #}
+
+            <!-- Message for No Results in Filter -->
+             <p id="no-results-message">No structures match the current filter.</p>
+
+            <!-- Global Pagination Controls -->
+            <div class="global-pagination-controls" id="pagination-global">
+                 <button id="global-prev-btn" disabled>Previous</button>
+                 <span class="page-info">
+                     Page <span class="current-page">1</span> of <span class="total-pages">1</span>
+                 </span>
+                 <button id="global-next-btn" disabled>Next</button>
+             </div>
+
+        {% else %} {# Handle case where there are NO annotations at all #}
             <p class="empty-list-message" style="margin-top: 30px;">You haven't annotated any proteins in this folder yet.</p>
             <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" class="action-link start-annotating-link">Start Annotating</a>
         {% endif %}
@@ -195,61 +227,180 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            const viewers = {}; // Keep track of viewer instances
+            const CARDS_PER_PAGE = 15;
+            let currentPage = 1;
+            let activeFilter = 'all'; // 'all', 'correct', 'wrong', 'unsure'
+            let allCards = []; // Array of all card elements
+            let filteredCards = []; // Array of card elements matching the current filter
 
-            // Iterate through the same grouped data used for HTML rendering
+            // --- DOM Element References ---
+            const filterButtons = document.querySelectorAll('.filter-controls button');
+            const paginationControls = document.getElementById('pagination-global');
+            const prevButton = document.getElementById('global-prev-btn');
+            const nextButton = document.getElementById('global-next-btn');
+            const currentPageSpan = paginationControls.querySelector('.current-page');
+            const totalPagesSpan = paginationControls.querySelector('.total-pages');
+            const noResultsMessage = document.getElementById('no-results-message');
+            const cardDisplayArea = document.getElementById('card-display-area'); // Container for all groups/cards
+
+
+            // --- Initialize 3Dmol Viewers (Do this early before hiding) ---
+            const viewers = {};
+            // Use Django template to iterate and find viewer elements *before* filtering/pagination JS runs
             {% regroup annotations by given_annotation as grouped_annotations_list_script %}
             {% for group in grouped_annotations_list_script %}
                 {% for annotation in group.list %}
                     {% with protein=annotation.protein %}
-
                     const viewerElement_{{ protein.id }} = document.getElementById('viewer-{{ protein.id }}');
                     const pdbFilePath_{{ protein.id }} = "{{ protein.pdb_file_path|escapejs }}";
 
-                    // Check if element exists, has a valid path, and hasn't already failed/loaded
-                    if (viewerElement_{{ protein.id }} && pdbFilePath_{{ protein.id }} && viewerElement_{{ protein.id }}.innerText.includes('Loading')) {
-                        try {
-                            const pdbPath_{{ protein.id }} = "{{ media_url }}" + pdbFilePath_{{ protein.id }}; // Construct full URL
-                            const filename_{{ protein.id }} = pdbFilePath_{{ protein.id }}.split('/').pop();
-                            const format_{{ protein.id }} = filename_{{ protein.id }}.split('.').pop().toLowerCase();
-                            const finalFormat_{{ protein.id }} = ['pdb', 'cif', 'sdf', 'mol2'].includes(format_{{ protein.id }}) ? format_{{ protein.id }} : 'pdb';
+                    if (viewerElement_{{ protein.id }} && pdbFilePath_{{ protein.id }}) {
+                        if (!viewers[{{ protein.id }}]) { // Ensure viewer not already created
+                            try {
+                                const pdbPath_{{ protein.id }} = "{{ media_url }}" + pdbFilePath_{{ protein.id }};
+                                const filename_{{ protein.id }} = pdbFilePath_{{ protein.id }}.split('/').pop();
+                                const format_{{ protein.id }} = filename_{{ protein.id }}.split('.').pop().toLowerCase();
+                                const finalFormat_{{ protein.id }} = ['pdb', 'cif', 'sdf', 'mol2'].includes(format_{{ protein.id }}) ? format_{{ protein.id }} : 'pdb';
 
-                            // Create viewer instance
-                            viewers[{{ protein.id }}] = $3Dmol.createViewer(viewerElement_{{ protein.id }}, {
-                                backgroundColor: '#f0f0f0', // Match container background
-                                antialias: true // Nicer rendering if performance allows
-                            });
+                                viewers[{{ protein.id }}] = $3Dmol.createViewer(viewerElement_{{ protein.id }}, { backgroundColor: '#f0f0f0', antialias: true });
 
-                            // Use $3Dmol.download which returns a Promise
-                            $3Dmol.download(pdbPath_{{ protein.id }}, viewers[{{ protein.id }}], { format: finalFormat_{{ protein.id }} })
-                                .then(function(){
-                                    // Success: Style and render the model
-                                    viewers[{{ protein.id }}].setStyle({}, { cartoon: { color: 'spectrum' } });
-                                    viewers[{{ protein.id }}].zoomTo();
-                                    viewers[{{ protein.id }}].render();
-                                    viewers[{{ protein.id }}].zoom(1.2); // Zoom slightly less for card view
-                                    viewers[{{ protein.id }}].render(); // Re-render after zoom
-                                    viewers[{{ protein.id }}].spin(true); // Re-render after zoom
-                                })
-                                .catch(function(err){
-                                    // Handle download errors
-                                    viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">Load Err</span>'; // Error message inside span
-                                    console.error("Error loading PDB for card {{ protein.id }}:", err);
-                                });
-                        } catch (e) {
-                            // Handle viewer creation errors
-                            viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">View Err</span>';
-                            console.error("Error creating viewer for {{ protein.id }}:", e);
+                                $3Dmol.download(pdbPath_{{ protein.id }}, viewers[{{ protein.id }}], { format: finalFormat_{{ protein.id }} })
+                                    .then(function(){
+                                        viewers[{{ protein.id }}].setStyle({}, { cartoon: { color: 'spectrum' } });
+                                        viewers[{{ protein.id }}].zoomTo();
+                                        viewers[{{ protein.id }}].render();
+                                        viewers[{{ protein.id }}].zoom(1.2);
+                                        viewers[{{ protein.id }}].render();
+                                        viewers[{{ protein.id }}].spin(true); // Spin disabled for overview
+                                    })
+                                    .catch(function(err){
+                                        viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">Load Err</span>';
+                                        console.error("Error loading PDB for card {{ protein.id }}:", err);
+                                    });
+                            } catch (e) {
+                                viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">View Err</span>';
+                                console.error("Error creating viewer for {{ protein.id }}:", e);
+                            }
                         }
-                    } else if (viewerElement_{{ protein.id }} && !pdbFilePath_{{ protein.id }} && viewerElement_{{ protein.id }}.innerText.includes('Loading')) {
-                        // Handle case where path is missing but element is there
+                    } else if (viewerElement_{{ protein.id }} && !pdbFilePath_{{ protein.id }}) {
                          viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">No Path</span>';
                     }
-                    // If element already shows an error or 'No Path', do nothing more.
-
                     {% endwith %}
                 {% endfor %}
             {% endfor %}
+
+            // --- Gather All Card Elements ---
+            // Ensure this runs *after* 3Dmol init potentially changes innerHTML on error
+            if (cardDisplayArea) { // Check if card area exists (i.e., if annotations exist)
+                 allCards = Array.from(cardDisplayArea.querySelectorAll('.protein-card-item'));
+            }
+
+            // --- Main Update Function ---
+            function updateView() {
+                if (!cardDisplayArea) return; // Exit if no annotations
+
+                // 1. Filter Cards
+                if (activeFilter === 'all') {
+                    filteredCards = allCards;
+                } else {
+                    filteredCards = allCards.filter(card => card.dataset.group === activeFilter);
+                }
+
+                // 2. Calculate Pagination for Filtered Set
+                const totalCards = filteredCards.length;
+                const totalPages = Math.ceil(totalCards / CARDS_PER_PAGE);
+                 // Ensure currentPage is valid after filtering
+                if (currentPage > totalPages && totalPages > 0) {
+                    currentPage = totalPages;
+                } else if (totalPages === 0) {
+                    currentPage = 1; // Reset to 1 if no results
+                }
+
+
+                // 3. Show/Hide Cards
+                // Hide ALL cards first
+                allCards.forEach(card => card.style.display = 'none');
+
+                 // Show cards for the current page within the filtered set
+                 const startIndex = (currentPage - 1) * CARDS_PER_PAGE;
+                 const endIndex = startIndex + CARDS_PER_PAGE;
+                 const cardsToShow = filteredCards.slice(startIndex, endIndex);
+
+                 cardsToShow.forEach(card => {
+                     card.style.display = 'flex'; // Or 'block', matching your CSS flex/block choice
+                 });
+
+                // 4. Update Pagination Controls
+                if (totalPages > 0) {
+                     paginationControls.style.display = 'block';
+                     currentPageSpan.textContent = currentPage;
+                     totalPagesSpan.textContent = totalPages;
+                     prevButton.disabled = (currentPage === 1);
+                     nextButton.disabled = (currentPage === totalPages);
+                     noResultsMessage.style.display = 'none';
+                 } else {
+                     // No results for the current filter
+                     paginationControls.style.display = 'none'; // Hide pagination if no pages
+                     noResultsMessage.style.display = 'block'; // Show 'no results' message
+                 }
+
+                 // Optional: Hide empty group headers (more complex, skip for now)
+                 // Example:
+                 // document.querySelectorAll('.annotation-group').forEach(groupDiv => {
+                 //     const groupName = groupDiv.dataset.groupContainer;
+                 //     const visibleCardsInGroup = cardsToShow.filter(card => card.dataset.group === groupName);
+                 //     groupDiv.style.display = visibleCardsInGroup.length > 0 ? 'block' : 'none';
+                 // });
+
+                 // Ensure grid container itself is visible if there are cards to show
+                 cardDisplayArea.style.display = totalCards > 0 ? 'block' : 'none';
+
+
+            }
+
+            // --- Event Listeners ---
+
+            // Filter Buttons
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Update active filter state
+                    activeFilter = button.dataset.filter;
+                    currentPage = 1; // Reset to first page on filter change
+
+                    // Update button visual state
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    // Update the view
+                    updateView();
+                });
+            });
+
+            // Pagination Buttons
+            prevButton.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    updateView();
+                }
+            });
+
+            nextButton.addEventListener('click', () => {
+                 // Recalculate total pages based on current filtered set before incrementing
+                 const currentTotalPages = Math.ceil(filteredCards.length / CARDS_PER_PAGE);
+                 if (currentPage < currentTotalPages) {
+                    currentPage++;
+                    updateView();
+                }
+            });
+
+            // --- Initial View Setup ---
+            if (allCards.length > 0) { // Only run update if there are cards
+                 updateView();
+             } else if (paginationControls) {
+                 // Ensure pagination is hidden if there are no cards at all
+                 paginationControls.style.display = 'none';
+             }
+
         });
     </script>
 
