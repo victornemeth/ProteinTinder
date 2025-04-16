@@ -20,6 +20,7 @@ And can be exported to csv from within the webapp.
 ## Stuff I need to Add
 
 - If you have suggestions please let me know!
+- Deploying the website with Debug=False, nginx config.
 - The ability to see an overview of the annotations of another user
 
 ## Use
@@ -32,6 +33,7 @@ And can be exported to csv from within the webapp.
 
 - 🧬 Interactive 3D protein viewer
 - 📱 Touch and mouse swipe support
+- 🧮 Overview page to see proteins grouped by annotation.
 - 🔐 User authentication (login/signup)
 - 💾 Annotations can be exported as csv.
 
