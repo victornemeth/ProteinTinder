@@ -1,0 +1,131 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Protein Annotator{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <style>
+        /* Reset and Base Styles */
+        html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; color: #343a40; font-size: 16px; line-height: 1.6; }
+        /* Header */
+        .app-header { background-color: #fff; padding: 10px 25px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .app-title a { font-size: 1.4em; font-weight: 600; color: #0056b3; text-decoration: none; }
+        .app-title a:hover { color: #003d80; }
+        .mode-switcher { display: flex; align-items: center; background-color: #e9ecef; border-radius: 15px; padding: 4px; }
+        .mode-switcher label { padding: 5px 12px; font-size: 0.85em; font-weight: 500; cursor: pointer; border-radius: 12px; transition: all 0.2s ease; color: #495057; user-select: none; }
+        .mode-switcher input[type="radio"] { display: none; }
+        .mode-switcher input[type="radio"]:checked + label { background-color: #007bff; color: white; box-shadow: 0 1px 3px rgba(0, 123, 255, 0.3); }
+        .mode-switcher input[type="radio"]:disabled + label { opacity: 0.5; cursor: not-allowed; background-color: #e9ecef; color: #6c757d; box-shadow: none; }
+        .mode-switcher.hidden { display: none; }
+        .header-right { font-size: 0.9em; color: #6c757d; }
+        .header-right a, .header-right button { color: #007bff; text-decoration: none; margin-left: 8px; background: none; border: none; cursor: pointer; font: inherit; padding: 0; }
+        .header-right a:hover, .header-right button:hover { text-decoration: underline; }
+        .header-right form { display: inline; }
+        .header-right .username { font-weight: 500; color: #343a40; margin-right: 5px; }
+        /* Main Content */
+        .main-container { max-width: 1200px; margin: 25px auto; padding: 0 15px; }
+        /* Footer */
+        .app-footer { margin-top: 40px; padding: 15px; text-align: center; font-size: 0.85em; color: #adb5bd; border-top: 1px solid #e9ecef; }
+        /* Utils */
+        .hidden { display: none !important; }
+        /* Messages */
+         .messages { list-style: none; padding: 0; margin: 20px 0; }
+         .messages li { padding: 12px 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid transparent; }
+         .messages li.success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+         .messages li.error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+         .messages li.info { background-color: #cce5ff; color: #004085; border-color: #b8daff; }
+         .messages li.warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+        /* Responsive */
+        @media (max-width: 767px) { .app-header { padding: 8px 15px; flex-direction: column; align-items: center; gap: 8px; } .header-left { width: 100%; justify-content: space-between; } .header-right { width: 100%; text-align: center; margin-top: 5px; } .mode-switcher label { padding: 4px 10px; font-size: 0.8em;} .main-container { margin-top: 15px; } }
+        @media (max-width: 450px) { .header-left { flex-direction: column; gap: 8px; align-items: center;} .mode-switcher { order: 2; } .app-title a { font-size: 1.2em; } }
+    </style>
+    {% block head %}{% endblock %} {# For page-specific CSS/JS links #}
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-left">
+            <span class="app-title"><a href="{% url 'annotations_app:view_folders' %}">Protein Annotator</a></span>
+            <div class="mode-switcher {% if not current_view_supports_modes %}hidden{% endif %}" id="global-mode-switcher">
+                <input type="radio" id="mode-switch-structure" name="global_mode" value="structure" {% if current_mode == 'structure' %}checked{% endif %}>
+                <label for="mode-switch-structure">Structure</label>
+                <input type="radio" id="mode-switch-architecture" name="global_mode" value="architecture" {% if current_mode == 'architecture' %}checked{% endif %}>
+                <label for="mode-switch-architecture" id="label-mode-architecture">Architecture</label>
+            </div>
+        </div>
+        <div class="header-right">
+            {% if user.is_authenticated %}
+                <span class="username">{{ user.username }}</span> |
+                <form id="logoutForm" method="post" action="{% url 'logout' %}" style="display:inline;">
+                    {% csrf_token %} <button type="submit">Logout</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}?next={{ request.path }}">Login</a> | <a href="{% url 'signup' %}">Sign Up</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="main-container">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %} <li class="{{ message.tags }}">{{ message }}</li> {% endfor %}
+            </ul>
+        {% endif %}
+        {% block content %}{% endblock %} {# Page-specific content goes here #}
+    </main>
+
+    <footer class="app-footer">
+        <p><small>Annotation Tool © {% now "Y" %}</small></p>
+    </footer>
+
+    {# Hidden Inputs for Global JS State #}
+    <input type="hidden" id="current-view-mode" value="{{ current_mode|default:'none' }}">
+    <input type="hidden" id="current-view-supports-modes" value="{{ current_view_supports_modes|yesno:'true,false' }}">
+    <input type="hidden" id="global-folder-id" value="{{ folder.id|default:'' }}">
+    <input type="hidden" id="global-protein-pk" value="{{ protein.pk|default:'' }}">
+
+    <script>
+    // Base script for mode switching navigation
+    document.addEventListener('DOMContentLoaded', function() {
+        const modeSwitcher = document.getElementById('global-mode-switcher');
+        const currentViewModeInput = document.getElementById('current-view-mode');
+        const supportsModesInput = document.getElementById('current-view-supports-modes');
+        const archModeRadio = document.getElementById('mode-switch-architecture');
+        const archModeLabel = document.getElementById('label-mode-architecture');
+
+        const pageSupportsModes = supportsModesInput?.value === 'true';
+        const initialMode = currentViewModeInput?.value || 'none';
+
+        if (archModeRadio && !pageSupportsModes) {
+            archModeRadio.disabled = true;
+            if (archModeLabel) { archModeLabel.style.opacity = '0.5'; archModeLabel.style.cursor = 'not-allowed'; archModeLabel.title = 'Mode switching not available on this page.'; }
+        }
+
+        if (modeSwitcher && pageSupportsModes) {
+            modeSwitcher.addEventListener('change', function(event) {
+                if (event.target.name === 'global_mode') {
+                    const selectedMode = event.target.value;
+                    if (selectedMode !== initialMode && !event.target.disabled) handleModeChangeNavigation(selectedMode);
+                    else if (event.target.disabled) { const ir = document.querySelector(`input[name="global_mode"][value="${initialMode}"]`); if (ir) ir.checked = true; }
+                }
+            });
+        }
+
+        function handleModeChangeNavigation(newMode) {
+            const currentPath = window.location.pathname;
+            const folderId = document.getElementById('global-folder-id')?.value;
+            const proteinPk = document.getElementById('global-protein-pk')?.value;
+            let newUrl = null;
+            if (folderId && proteinPk && currentPath.includes(`/folder/${folderId}/annotate/`)) { newUrl = `/folder/${folderId}/annotate/${newMode}/${proteinPk}/`; }
+            else if (folderId && currentPath.includes(`/folder/${folderId}/annotate/`)) { newUrl = `/folder/${folderId}/annotate/${newMode}/`; }
+            else { console.warn("Mode switch context unclear:", currentPath); return; }
+            if (newUrl) { window.location.href = newUrl; }
+            else { const ir = document.querySelector(`input[name="global_mode"][value="${initialMode}"]`); if (ir) ir.checked = true; }
+        }
+    });
+    </script>
+    {% block scripts %}{% endblock %} {# For page-specific JS logic #}
+</body>
+</html>
