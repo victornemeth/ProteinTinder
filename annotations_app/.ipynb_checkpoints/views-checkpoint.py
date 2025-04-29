@@ -15,6 +15,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.contrib import messages # Make sure messages is imported
 
 from .forms import CustomUserCreationForm, PDBZipUploadForm
 from .models import ProteinFolder, Protein, Annotation
@@ -22,7 +23,9 @@ from .models import ProteinFolder, Protein, Annotation
 import csv
 from django.http import HttpResponse
 from collections import defaultdict
-from django.contrib import messages # Import messages framework
+
+
+logger = logging.getLogger(__name__) # Setup logger for the view
 
 def redirect_to_annotate(request):
     folder = ProteinFolder.objects.first()
@@ -39,8 +42,11 @@ def upload_zip_view(request):
             annotation_title = form.cleaned_data['annotation_title']
             annotation_description = form.cleaned_data['annotation_description']
             zip_file = request.FILES['zip_file']
+            # Get the value of the new checkbox
+            is_architecture_upload = form.cleaned_data['is_architecture_annotation']
             user = request.user
 
+            # Create the folder instance first
             folder = ProteinFolder.objects.create(
                 name=folder_name,
                 user=user,
@@ -48,33 +54,181 @@ def upload_zip_view(request):
                 description=annotation_description
             )
             safe_folder = slugify(folder_name)
+            # Define base storage path for this upload
+            base_storage_path = f"pdbs/{user.username}/{safe_folder}"
 
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                zip_path = os.path.join(tmpdirname, zip_file.name)
-                with open(zip_path, 'wb+') as temp_file:
-                    for chunk in zip_file.chunks():
-                        temp_file.write(chunk)
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(tmpdirname)
-                for root, _, files in os.walk(tmpdirname):
-                    for filename in files:
-                        if filename.lower().endswith('.pdb'):
-                            protein_id, _ = os.path.splitext(filename)
-                            protein_id = protein_id.strip().upper()
-                            full_path = os.path.join(root, filename)
-                            relative_path = f"pdbs/{user.username}/{safe_folder}/{filename}"
-                            with open(full_path, 'rb') as f:
-                                default_storage.save(relative_path, f)
-                            _, created = Protein.objects.get_or_create(
-                                protein_id=protein_id,
-                                folder=folder,
-                                defaults={
-                                    'name': protein_id,
-                                    'pdb_file_path': relative_path
-                                }
+            try:
+                with tempfile.TemporaryDirectory() as tmpdirname:
+                    zip_path = os.path.join(tmpdirname, zip_file.name)
+                    # Save uploaded zip to temp dir
+                    with open(zip_path, 'wb+') as temp_file:
+                        for chunk in zip_file.chunks():
+                            temp_file.write(chunk)
+
+                    # --- Extract and Process Files ---
+                    pdb_files_map = {} # Store {pdb_basename: full_temp_path}
+                    csv_files_map = {} # Store {csv_basename: full_temp_path}
+                    all_files_in_zip = [] # Keep track of all files extracted
+
+                    try:
+                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                            all_files_in_zip = zip_ref.namelist()
+                            zip_ref.extractall(tmpdirname)
+                    except zipfile.BadZipFile:
+                        messages.error(request, "Invalid ZIP file.")
+                        folder.delete() # Clean up the created folder object
+                        return render(request, 'annotations_app/upload_zip.html', {'form': form})
+                    except Exception as e:
+                        logger.error(f"Error extracting ZIP file: {e}", exc_info=True)
+                        messages.error(request, f"Error extracting ZIP file: {e}")
+                        folder.delete() # Clean up
+                        return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+
+                    # --- Find all PDB and CSV files within the extracted structure ---
+                    for root, _, files in os.walk(tmpdirname):
+                        for filename in files:
+                            full_temp_path = os.path.join(root, filename)
+                            base, ext = os.path.splitext(filename)
+                            ext_lower = ext.lower()
+
+                            if ext_lower == '.pdb':
+                                # Use uppercase basename consistent with Protein model protein_id?
+                                # Let's keep original case for map key, normalize later if needed
+                                pdb_files_map[base] = full_temp_path
+                            elif ext_lower == '.csv':
+                                csv_files_map[base] = full_temp_path
+
+                    if not pdb_files_map:
+                        messages.warning(request, "No PDB files (.pdb) found in the uploaded ZIP.")
+                        folder.delete() # Clean up
+                        return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+
+                    proteins_to_create = [] # List to store protein data before bulk creation
+
+                    # --- Validation and Preparation based on annotation type ---
+                    if is_architecture_upload:
+                        # Validate that every PDB has a corresponding CSV
+                        missing_csvs = []
+                        for pdb_base in pdb_files_map.keys():
+                            if pdb_base not in csv_files_map:
+                                missing_csvs.append(f"{pdb_base}.pdb")
+
+                        if missing_csvs:
+                            error_msg = "Architecture annotation requires a matching .csv file for every .pdb file. Missing CSVs for: " + ", ".join(missing_csvs)
+                            messages.error(request, error_msg)
+                            folder.delete() # Clean up
+                            return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+                        # Prepare protein data including CSV paths
+                        for pdb_base, pdb_temp_path in pdb_files_map.items():
+                            protein_id = pdb_base.strip().upper() # Consistent ID
+                            pdb_filename = os.path.basename(pdb_temp_path)
+                            csv_temp_path = csv_files_map[pdb_base]
+                            csv_filename = os.path.basename(csv_temp_path)
+
+                            relative_pdb_path = f"{base_storage_path}/{pdb_filename}"
+                            relative_csv_path = f"{base_storage_path}/{csv_filename}" # Store in the same dir
+
+                            proteins_to_create.append({
+                                'protein_id': protein_id,
+                                'name': protein_id, # Default name to protein_id
+                                'folder': folder,
+                                'pdb_temp_path': pdb_temp_path,
+                                'csv_temp_path': csv_temp_path,
+                                'pdb_file_path': relative_pdb_path,
+                                'domain_csv_path': relative_csv_path,
+                            })
+
+                    else: # Standard PDB annotation
+                        for pdb_base, pdb_temp_path in pdb_files_map.items():
+                            protein_id = pdb_base.strip().upper()
+                            pdb_filename = os.path.basename(pdb_temp_path)
+                            relative_pdb_path = f"{base_storage_path}/{pdb_filename}"
+
+                            proteins_to_create.append({
+                                'protein_id': protein_id,
+                                'name': protein_id,
+                                'folder': folder,
+                                'pdb_temp_path': pdb_temp_path,
+                                'csv_temp_path': None, # No CSV
+                                'pdb_file_path': relative_pdb_path,
+                                'domain_csv_path': None, # No CSV path
+                            })
+
+                    # --- Save files to storage and create Protein objects ---
+                    created_proteins = 0
+                    skipped_duplicates = 0
+                    for protein_data in proteins_to_create:
+                        # Save PDB file
+                        with open(protein_data['pdb_temp_path'], 'rb') as f_pdb:
+                            try:
+                                default_storage.save(protein_data['pdb_file_path'], f_pdb)
+                            except Exception as e:
+                                logger.error(f"Error saving PDB file {protein_data['pdb_file_path']}: {e}", exc_info=True)
+                                messages.error(request, f"Failed to save PDB file for {protein_data['protein_id']}. Aborting upload.")
+                                folder.delete() # Clean up folder if critical error
+                                # Optionally: Delete already saved files/proteins if possible
+                                return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+
+                        # Save CSV file if it exists
+                        if protein_data['csv_temp_path']:
+                            with open(protein_data['csv_temp_path'], 'rb') as f_csv: # Read CSV as binary for storage
+                                try:
+                                    default_storage.save(protein_data['domain_csv_path'], f_csv)
+                                except Exception as e:
+                                    logger.error(f"Error saving CSV file {protein_data['domain_csv_path']}: {e}", exc_info=True)
+                                    messages.error(request, f"Failed to save CSV file for {protein_data['protein_id']}. Associated PDB was saved, but CSV failed.")
+                                    # Decide how to proceed: continue? abort? For now, log and continue but without CSV path in DB
+                                    protein_data['domain_csv_path'] = None # Don't save CSV path if file saving failed
+
+
+                        # Create Protein DB entry
+                        try:
+                            Protein.objects.create(
+                                protein_id=protein_data['protein_id'],
+                                name=protein_data['name'],
+                                folder=protein_data['folder'],
+                                pdb_file_path=protein_data['pdb_file_path'],
+                                domain_csv_path=protein_data['domain_csv_path']
                             )
-            return redirect('annotations_app:view_folders')
-    else:
+                            created_proteins += 1
+                        except IntegrityError:
+                            # Handle case where protein_id + folder combination already exists (e.g., re-upload)
+                            logger.warning(f"Protein '{protein_data['protein_id']}' already exists in folder '{folder.name}'. Skipping.")
+                            skipped_duplicates += 1
+                            # Optional: Delete the just-uploaded files for the duplicate if you want strict behavior
+                            # default_storage.delete(protein_data['pdb_file_path'])
+                            # if protein_data['domain_csv_path']: default_storage.delete(protein_data['domain_csv_path'])
+                        except Exception as e:
+                             logger.error(f"Error creating Protein record for {protein_data['protein_id']}: {e}", exc_info=True)
+                             messages.error(request, f"Database error creating record for {protein_data['protein_id']}. Files might be saved, but DB entry failed.")
+                             # More robust cleanup might be needed here depending on requirements
+
+
+                    # --- Post-processing messages ---
+                    if created_proteins > 0:
+                         messages.success(request, f"Successfully uploaded and processed {created_proteins} protein(s) for folder '{folder.name}'.")
+                    if skipped_duplicates > 0:
+                         messages.warning(request, f"Skipped {skipped_duplicates} duplicate protein(s) already present in the folder.")
+                    if created_proteins == 0 and skipped_duplicates == 0:
+                         # This case might happen if validation failed earlier but wasn't caught, or other edge cases
+                         messages.warning(request, "No new proteins were added. Check the ZIP contents or previous uploads.")
+
+
+                    return redirect('annotations_app:view_folders')
+
+            except Exception as e:
+                # Catch broader exceptions during file handling/processing
+                logger.error(f"An unexpected error occurred during upload for folder '{folder_name}': {e}", exc_info=True)
+                messages.error(request, f"An unexpected error occurred: {e}. Please try again.")
+                if 'folder' in locals() and folder.pk:
+                     folder.delete() # Attempt cleanup if folder object exists
+                return render(request, 'annotations_app/upload_zip.html', {'form': form})
+
+    else: # GET request
         form = PDBZipUploadForm()
     return render(request, 'annotations_app/upload_zip.html', {'form': form})
 
@@ -181,7 +335,6 @@ def annotate_protein_view(request, folder_id, protein_pk=None): # Add protein_pk
     return render(request, 'annotations_app/annotate.html', context)
 
 
-@csrf_exempt
 @login_required
 def submit_annotation(request):
     try:
