@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {# --- Essential Meta Tags --- #}
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Annotate Architecture: {% if protein %}{{ protein.protein_id }}{% else %}Not Found{% endif %}</title>
+
+    {# --- 3Dmol.js Library --- #}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
+
+    {# --- CSS Styles (Copied from previous version or adapt as needed) --- #}
+    <style>
+        /* Basic styles - Adapt from annotate.html or create new */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8f9fa; margin: 0; padding: 20px; color: #343a40;}
+        .container-arch-main { max-width: 1300px; margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+        /* --- Page Header Copy from annotate.html for consistency --- */
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;
+        }
+        .page-header h1 { font-size: 1.6em; margin: 0; color: #212529; font-weight: 600;}
+        .auth-bar { font-size: 0.875em; color: #6c757d; white-space: nowrap; }
+        .auth-bar span { margin-right: 5px; }
+        .auth-bar form { display: inline; }
+        .auth-bar button, .auth-bar a {
+            background: none; border: none; color: #007bff; cursor: pointer;
+            padding: 0; font: inherit; font-size: 1em; text-decoration: none; margin-left: 5px;
+        }
+        .auth-bar button:hover, .auth-bar a:hover { text-decoration: underline; }
+        /* --- End Page Header --- */
+
+        .arch-header { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;}
+        .arch-header h2 { margin-top: 0; color: #343a40; }
+        .arch-header p { color: #6c757d; font-size: 0.95em; margin-bottom: 5px;}
+
+        .container-arch-content { display: flex; gap: 25px; flex-wrap: wrap; }
+        .viewer-panel { flex: 3; min-width: 550px; min-height: 550px; border: 1px solid #dee2e6; position: relative; background-color: white; border-radius: 6px; }
+        .domain-panel { flex: 1; min-width: 300px; max-height: 550px; /* Limit height */ background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; overflow-y: auto; border-radius: 6px; }
+        #pdbViewerArch { width: 100%; height: 550px; /* Match min-height */ border-radius: 6px; } /* Add radius */
+
+        .domain-panel h4 { margin-top: 0; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;}
+        .domain-list { list-style: none; padding: 0; margin: 0; }
+        .domain-item {
+            padding: 8px 10px; margin-bottom: 8px; border: 1px solid #e0e0e0; background-color: white;
+            border-radius: 5px; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9em; /* Slightly smaller */
+        }
+        .domain-item:hover { background-color: #e9ecef; }
+        .domain-item.selected { background-color: #cfe2ff; border-color: #9ec5fe; font-weight: 500; }
+        .domain-item.marked-wrong { background-color: #f8d7da; border-color: #f5c6cb; }
+        .domain-item.marked-wrong .domain-name { text-decoration: line-through; color: #721c24;}
+        .domain-name { font-weight: 500; color: #212529; margin-right: 5px;}
+        .domain-range { font-size: 0.9em; color: #6c757d; }
+
+        .mark-wrong-btn {
+            padding: 3px 8px; font-size: 0.8em; color: #dc3545; background-color: transparent;
+            border: 1px solid #f1aeae; border-radius: 4px; cursor: pointer; margin-left: 10px;
+            transition: background-color 0.2s, color 0.2s, border-color 0.2s; white-space: nowrap;
+        }
+        .mark-wrong-btn:hover { background-color: #dc3545; color: white; border-color: #dc3545;}
+        .mark-wrong-btn.marked { background-color: #c82333; color: white; border-color: #c82333; }
+
+        .action-bar { text-align: center; margin-top: 25px; border-top: 1px solid #e9ecef; padding-top: 20px; }
+        .action-button { padding: 10px 20px; font-size: 1em; cursor: pointer; border-radius: 5px; border: 1px solid; margin: 0 8px; font-weight: 500;}
+        .save-next-btn { background-color: #198754; color: white; border-color: #198754; } /* Bootstrap green */
+        .save-next-btn:hover { background-color: #157347; }
+        .save-next-btn:disabled { background-color: #6c757d; border-color: #6c757d; cursor: not-allowed;}
+        .overview-btn { background-color: #0d6efd; color: white; border-color: #0d6efd; text-decoration: none;} /* Bootstrap blue */
+        .overview-btn:hover { background-color: #0b5ed7; }
+
+        .error-message { color: #dc3545; font-weight: bold; padding: 12px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; margin-bottom: 15px; text-align: center;}
+        .loading-message, .viewer-message { text-align: center; padding: 40px; font-size: 1.1em; color: #6c757d;}
+
+         /* --- Footer --- Copied from annotate.html */
+         footer {
+            margin-top: 40px;
+            padding-top: 15px;
+            text-align: center;
+            font-size: 0.85em;
+            color: #adb5bd; /* Lighter grey */
+            border-top: 1px solid #e9ecef;
+        }
+    </style>
+
+</head>
+<body>
+
+<div class="container-arch-main">
+    {# --- Header section - Copied from annotate.html --- #}
+    <div class="page-header">
+        <h1>{{ annotation_title|default:"Protein Annotation" }}</h1> {# Use the specific annotation title #}
+        <div class="auth-bar">
+            {% if user.is_authenticated %}
+                <span>{{ user.username }}</span> |
+                <form id="logoutForm" method="post" action="{% url 'logout' %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Logout</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
+                <a href="{% url 'signup' %}">Sign Up</a>
+            {% endif %}
+        </div>
+    </div>
+    {# --- End Header section --- #}
+
+
+    <div class="arch-header">
+        <h2>Annotate Architecture: {{ protein.protein_id }}</h2>
+        {% if annotation_description %}<p>{{ annotation_description }}</p>{% endif %}
+    </div>
+
+    {% if csv_error %}
+        <div class="error-message">
+            Could not load domain data: {{ csv_error }} <br>
+            Cannot proceed with architecture annotation for this protein.
+            <div style="margin-top: 15px;">
+                 <a href="{% url 'annotations_app:view_folders' %}" class="action-button overview-btn">Back to Folders</a>
+            </div>
+        </div>
+    {% elif not pdb_url %}
+        <div class="error-message">
+            PDB file URL is missing or could not be generated. Cannot display structure.
+             <div style="margin-top: 15px;">
+                 <a href="{% url 'annotations_app:view_folders' %}" class="action-button overview-btn">Back to Folders</a>
+             </div>
+        </div>
+    {% else %}
+        {# --- Main Content: Viewer and Domain List --- #}
+        <div class="container-arch-content">
+            <div class="viewer-panel">
+                <div id="pdbViewerArch">
+                    <p class="loading-message">Loading 3D Viewer...</p>
+                    {# Error messages from JS will be inserted here #}
+                </div>
+            </div>
+            <div class="domain-panel">
+                <h4>Domains</h4>
+                {% if domain_data %}
+                    <p style="font-size: 0.85em; color: #6c757d; margin-top:-5px; margin-bottom:10px;">Click domain to highlight. Mark incorrect domains.</p>
+                    <ul class="domain-list" id="domainList">
+                        {% for domain in domain_data %}
+                        <li class="domain-item"
+                            data-domain-id="{{ domain.id }}"
+                            data-domain-name="{{ domain.name|escape }}"
+                            data-start-res="{{ domain.start }}"
+                            data-end-res="{{ domain.end }}">
+                            <span title="{{ domain.name }} ({{ domain.start }}-{{ domain.end }})">
+                                <span class="domain-name">{{ domain.name }}</span>
+                                <span class="domain-range">({{ domain.start }}-{{ domain.end }})</span>
+                            </span>
+                            <button class="mark-wrong-btn" data-domain-id="{{ domain.id }}">Mark Wrong</button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="viewer-message">No domain data loaded from CSV.</p>
+                {% endif %}
+            </div>
+        </div> {# End container-arch-content #}
+
+        {# --- Action Buttons --- #}
+        <div class="action-bar">
+            <button id="saveNextBtn" class="action-button save-next-btn">Save Corrections & Next</button>
+            <a href="{% url 'annotations_app:annotation_overview' folder_id=folder.id %}" class="action-button overview-btn">Folder Overview</a>
+        </div>
+
+    {% endif %} {# End of main content conditional block #}
+
+    {# --- Footer --- Copied from annotate.html #}
+    <footer>
+        <p><small>Annotation Tool © 2025</small></p>
+    </footer>
+
+</div> {# End container-arch-main #}
+
+
+{# Pass domain data to JavaScript #}
+{% if domain_data and not csv_error and pdb_url %}
+    {{ domain_data|json_script:"domain-data-json" }}
+{% endif %}
+
+{# --- Main JavaScript Logic --- #}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // Only run if the main content was rendered (no fatal errors)
+    const viewerElement = document.getElementById("pdbViewerArch");
+    const domainListElement = document.getElementById("domainList");
+    const saveNextButton = document.getElementById("saveNextBtn");
+    const domainDataScript = document.getElementById('domain-data-json');
+
+    // Exit if essential elements/data aren't present
+    if (!viewerElement || !domainListElement || !saveNextButton || !domainDataScript) {
+        console.log("Architecture annotation elements not found, skipping JS init.");
+        return;
+    }
+    // Also check if the viewer isn't already showing an error
+    if (viewerElement.querySelector('.error-message')) {
+         console.log("Viewer already contains an error message, skipping JS init.");
+         return;
+    }
+
+    // --- Config ---
+    const proteinPk = "{{ protein.pk|escapejs }}";
+    const folderId = "{{ folder.id|escapejs }}";
+    const pdbUrl = "{{ pdb_url|escapejs }}";
+    const isSpecificRedo = {{ is_specific_redo|yesno:"true,false" }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    let viewer = null;
+    let domainData = JSON.parse(domainDataScript.textContent || '[]');
+    let markedWrong = new Set();
+    let currentSelection = null;
+
+    if (!csrfToken) {
+        console.error("CSRF token not found!");
+        alert("Error: CSRF token missing. Cannot save annotations.");
+        if(saveNextButton) saveNextButton.disabled = true;
+    }
+
+    // --- Initialize 3Dmol Viewer ---
+    if (pdbUrl) {
+        try {
+            // $3Dmol should be defined now because the script tag is in the <head>
+            viewer = $3Dmol.createViewer(viewerElement, {
+                defaultcolors: $3Dmol.elementColors.rasmol,
+                backgroundColor: 'white',
+            });
+
+            const format = pdbUrl.split('?')[0].split('.').pop().toLowerCase();
+            const supportedFormats = ['pdb', 'cif', 'mcif', 'sdf', 'mol2'];
+            const fileFormat = supportedFormats.includes(format) ? format : (pdbUrl.includes('.cif') ? 'cif' : 'pdb');
+
+            $3Dmol.download(pdbUrl, viewer, { format: fileFormat })
+                .then(() => {
+                    viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                    viewer.zoomTo();
+                    viewer.render();
+                    console.log("3Dmol model loaded.");
+                    const loadingMsg = viewerElement.querySelector('.loading-message');
+                    if (loadingMsg) loadingMsg.remove();
+                })
+                .catch(error => {
+                    viewerElement.innerHTML = `<p class='error-message'>Error loading structure: ${error}</p>`;
+                    console.error("3Dmol download error:", error);
+                });
+        } catch(e) {
+             viewerElement.innerHTML = `<p class='error-message'>Error initializing 3D viewer: ${e}</p>`;
+             console.error("3Dmol init error:", e);
+        }
+    } else {
+         console.error("PDB URL missing for viewer initialization.");
+         // The Django template likely already showed an error message
+    }
+
+    // --- Domain List Interaction ---
+    domainListElement.addEventListener('click', function(event) {
+        const target = event.target;
+        const domainItem = target.closest('.domain-item');
+        if (!domainItem) return;
+
+        const domainId = domainItem.dataset.domainId;
+        const isMarkWrongButton = target.classList.contains('mark-wrong-btn');
+
+        if (isMarkWrongButton) {
+            event.stopPropagation();
+            toggleMarkWrong(domainId, domainItem, target);
+        } else {
+            const domain = domainData.find(d => d.id === domainId);
+            if (domain) {
+                selectDomain(domainItem, domain);
+            }
+        }
+    });
+
+    // --- Toggle Mark Wrong State ---
+    function toggleMarkWrong(domainId, itemElement, buttonElement) {
+        if (markedWrong.has(domainId)) {
+            markedWrong.delete(domainId);
+            itemElement.classList.remove('marked-wrong');
+            buttonElement.classList.remove('marked');
+            buttonElement.textContent = "Mark Wrong";
+        } else {
+            markedWrong.add(domainId);
+            itemElement.classList.add('marked-wrong');
+            buttonElement.classList.add('marked');
+            buttonElement.textContent = "Unmark";
+        }
+        console.log("Marked wrong IDs:", Array.from(markedWrong)); // Log changes
+    }
+
+    // --- Highlight Domain in 3Dmol ---
+    function selectDomain(itemElement, domain) {
+        if (!viewer || !domain) return;
+
+        document.querySelectorAll('.domain-item.selected').forEach(el => el.classList.remove('selected'));
+        itemElement.classList.add('selected');
+
+        viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+        viewer.removeAllLabels();
+
+        const selection = { resi: $3Dmol.range(domain.start, domain.end) };
+        const highlightColor = '#FFBF00'; // Amber/Gold
+        const style = { cartoon: { color: highlightColor, thickness: 1.5 } };
+
+        viewer.setStyle(selection, style);
+        viewer.addResidueLabels(`(${domain.start}-${domain.end}) ${domain.name}`, {
+            sel: selection, font: 'Arial', fontSize: 14, fontColor: 'black',
+            fontOpacity: 1.0, borderThickness: 0.5, borderColor: 'grey',
+            showBackground: true, backgroundColor: highlightColor, backgroundOpacity: 0.6
+        });
+
+        viewer.zoomTo(selection, 800);
+        viewer.render();
+
+        currentSelection = { ...domain, color: highlightColor };
+    }
+
+    // --- Save & Next Button Logic ---
+    saveNextButton.addEventListener('click', async function() {
+        if (!csrfToken) {
+            alert("CSRF token missing. Cannot submit.");
+            return;
+        }
+        saveNextButton.disabled = true;
+        saveNextButton.textContent = "Saving...";
+
+        const correctionsPayload = [];
+        markedWrong.forEach(frontendId => {
+            const domainInfo = domainData.find(d => d.id === frontendId);
+            if (domainInfo) {
+                correctionsPayload.push({
+                    name: domainInfo.name,
+                    start: domainInfo.start,
+                    end: domainInfo.end
+                });
+            }
+        });
+
+        try {
+            const correctionResponse = await fetch("{% url 'annotations_app:submit_domain_correction' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken
+                },
+                body: JSON.stringify({
+                    protein_pk: proteinPk,
+                    folder_id: folderId,
+                    corrections: correctionsPayload
+                })
+            });
+
+            if (!correctionResponse.ok) {
+                 let errorMsg = correctionResponse.statusText;
+                 try {
+                     const errorData = await correctionResponse.json();
+                     errorMsg = errorData.error || errorData.message || JSON.stringify(errorData);
+                 } catch (e) { /* Ignore */ }
+                 throw new Error(`Save failed: ${errorMsg} (Status: ${correctionResponse.status})`);
+            }
+
+            const correctionResult = await correctionResponse.json();
+            if (!correctionResult.success) {
+                 const errorDetails = correctionResult.errors ? ` Details: ${JSON.stringify(correctionResult.errors)}` : '';
+                 throw new Error(`Save failed: ${correctionResult.message || 'Server reported failure.'}${errorDetails}`);
+            }
+
+            console.log("Annotations saved:", correctionResult.message);
+
+            if (isSpecificRedo) {
+                window.location.href = "{% url 'annotations_app:annotation_overview' folder_id=folder.id %}";
+            } else {
+                window.location.reload();
+            }
+
+        } catch (error) {
+            console.error("Save & Next error:", error);
+            alert(`Failed to save annotations: ${error.message}`);
+            saveNextButton.disabled = false; // Re-enable button on error
+            saveNextButton.textContent = "Save Corrections & Next";
+        }
+    });
+
+}); // End DOMContentLoaded
+</script>
+
+</body>
+</html>
