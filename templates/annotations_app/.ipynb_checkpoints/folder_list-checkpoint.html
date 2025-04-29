@@ -2,7 +2,6 @@
 <html>
 <head>
     <title>Choose Folder</title>
-    <!-- Add viewport meta tag for responsive behaviour -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* --- Base Styles (PC / Default) --- */
@@ -85,10 +84,12 @@
             border-bottom: none;
         }
 
-        /* Folder name, status, count */
+        /* Folder name, type, status, count */
         .folder-info {
              font-weight: 500;
              color: #495057;
+             flex-grow: 1; /* Allow info to take up space */
+             margin-right: 15px; /* Space between info and actions */
         }
         .folder-info a {
             color: #0056b3; /* Darker blue for main link */
@@ -98,10 +99,24 @@
          .folder-info a:hover {
              text-decoration: underline;
          }
+         /* NEW: Style for the folder type indicator */
+         .folder-type {
+            font-size: 0.8em;
+            font-weight: normal; /* Lighter than name */
+            color: #6c757d; /* Muted color */
+            background-color: #e9ecef; /* Light background chip */
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle; /* Align nicely with text */
+            white-space: nowrap; /* Prevent wrapping */
+         }
          .folder-info span.status-count {
             font-size: 0.85em;
             color: #6c757d;
             margin-left: 8px;
+            display: inline-block; /* Keep on same line */
+            white-space: nowrap;
          }
           .folder-info span.status-count .emoji {
              font-size: 1.1em; /* Make emoji slightly larger */
@@ -111,6 +126,7 @@
         /* Action links container */
         .folder-actions {
             white-space: nowrap; /* Prevent actions wrapping on slightly narrow PC view */
+            flex-shrink: 0; /* Prevent actions from shrinking */
         }
 
         .folder-actions a.action-link { /* Renamed class */
@@ -150,7 +166,7 @@
             background-color: #218838; /* Darker green */
         }
 
-        /* Message Styling (Uncommented and improved) */
+        /* Message Styling */
          .messages { list-style: none; padding: 0; margin: 20px 0; }
          .messages li { padding: 12px 15px; border-radius: 5px; margin-bottom: 10px; }
          .messages li.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -201,15 +217,22 @@
             .folder-info {
                 display: block; /* Ensure it takes full width */
                 margin-bottom: 10px; /* Space below folder info */
-                 font-size: 1.1em; /* Slightly larger main text */
+                margin-right: 0; /* No right margin needed when stacked */
+                font-size: 1.1em; /* Slightly larger main text */
             }
              .folder-info a {
                 font-weight: 600; /* Keep name bold */
              }
+              /* Adjust type indicator for mobile */
+             .folder-type {
+                 display: inline-block; /* Keep it chip-like */
+                 margin-top: 5px; /* Add some space if it wraps under */
+                 margin-left: 0; /* Align left under name */
+             }
              .folder-info span.status-count {
                 display: block; /* Put status/count on new line */
                 margin-left: 0; /* Reset margin */
-                margin-top: 5px; /* Space above status */
+                margin-top: 8px; /* Space above status */
                 font-size: 0.9em;
             }
 
@@ -281,11 +304,20 @@
         <ul class="folder-list">
             {% for entry in folder_data %}
                 <li>
-                    {# Grouped folder name/status/count #}
+                    {# Grouped folder name/type/status/count #}
                     <span class="folder-info">
                         <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
                             {{ entry.folder.name }}
                         </a>
+                        {# --- NEW: Display Folder Type --- #}
+                        <span class="folder-type">
+                            {% if entry.is_architecture %}
+                                🏗️ Architecture
+                            {% else %}
+                                🧬 Structure Only
+                            {% endif %}
+                        </span>
+                        {# --- End New --- #}
                         <span class="status-count">
                              <span class="emoji">{% if entry.is_complete %} ✅ {% else %} ⏳ {% endif %}</span>
                              ({{ entry.annotated_count }}/{{ entry.total_proteins }})

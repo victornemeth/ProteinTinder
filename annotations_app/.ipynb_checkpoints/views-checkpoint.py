@@ -5,27 +5,99 @@ import json
 import zipfile
 import tempfile
 import logging
-from django.db import IntegrityError
+import io # Required for reading CSV from storage
+
+from django.db import IntegrityError, transaction # Import transaction
 from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.files.storage import default_storage
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404 # Import Http404
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone # <<<< ADD THIS LINE
 from django.utils.text import slugify
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie # Import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
-from django.contrib import messages # Make sure messages is imported
+from django.contrib import messages
 
 from .forms import CustomUserCreationForm, PDBZipUploadForm
-from .models import ProteinFolder, Protein, Annotation
+# Import DomainCorrection model
+from .models import ProteinFolder, Protein, Annotation, DomainCorrection
+from django.db.models import Exists, OuterRef
 
 import csv
 from django.http import HttpResponse
 from collections import defaultdict
 
 
-logger = logging.getLogger(__name__) # Setup logger for the view
+logger = logging.getLogger(__name__)
+
+
+# --- Helper Function for CSV Parsing ---
+def parse_domain_csv(protein):
+    """Reads and parses the domain CSV file associated with a protein."""
+    if not protein.domain_csv_path:
+        return None, "No CSV path defined for this protein."
+
+    try:
+        if not default_storage.exists(protein.domain_csv_path):
+             return None, f"CSV file not found at path: {protein.domain_csv_path}"
+
+        with default_storage.open(protein.domain_csv_path, mode='rb') as binary_file:
+            csv_text_stream = io.TextIOWrapper(binary_file, encoding='utf-8')
+            reader = csv.DictReader(csv_text_stream)
+            domains = []
+
+            # --- Define required columns based on ACTUAL headers ---
+            # Using the names shown in the error message and your 'cat' output
+            required_columns = ['Predicted Domain', 'Start Residue', 'End Residue']
+
+            if not reader.fieldnames or not all(col in reader.fieldnames for col in required_columns):
+                missing = [col for col in required_columns if not reader.fieldnames or col not in reader.fieldnames]
+                found_cols = ', '.join(reader.fieldnames) if reader.fieldnames else 'None'
+                csv_text_stream.close() # Close stream before returning
+                return None, f"CSV missing required columns: {', '.join(missing)}. Found headers: {found_cols}"
+
+            for i, row in enumerate(reader):
+                try:
+                    # --- Use ACTUAL header names to access data ---
+                    start_pos_str = row.get('Start Residue')
+                    end_pos_str = row.get('End Residue')
+                    domain_name = row.get('Predicted Domain', '').strip() # Use .get for safety
+
+                    # Check if essential values are missing/empty in the row
+                    if start_pos_str is None or end_pos_str is None or not domain_name:
+                        logger.warning(f"Skipping row {i+1} in {protein.domain_csv_path} due to missing values. Row: {row}")
+                        continue
+
+                    start_pos = int(start_pos_str)
+                    end_pos = int(end_pos_str)
+                    # --- End of using ACTUAL header names ---
+
+                    if not domain_name: # Double check after strip
+                        logger.warning(f"Skipping row {i+1} in {protein.domain_csv_path} due to empty domain name after strip. Row: {row}")
+                        continue
+
+                    domains.append({
+                        'id': f"domain_{i}",
+                        'name': domain_name,
+                        'start': start_pos,
+                        'end': end_pos
+                    })
+                except (ValueError, KeyError, TypeError) as e: # Catch potential int conversion errors too
+                    logger.warning(f"Skipping row {i+1} in {protein.domain_csv_path} due to parsing error: {e}. Row: {row}")
+                    continue
+
+            return domains, None
+
+    except UnicodeDecodeError:
+         logger.error(f"Encoding error reading CSV {protein.domain_csv_path}. Ensure it is UTF-8.", exc_info=True)
+         return None, f"CSV file encoding issue. Ensure it's UTF-8 encoded."
+    except Exception as e:
+        logger.error(f"Error reading or parsing CSV {protein.domain_csv_path} for protein {protein.protein_id}: {e}", exc_info=True)
+        error_msg = f"Server error reading CSV file: {e}"
+        return None, error_msg
+
 
 def redirect_to_annotate(request):
     folder = ProteinFolder.objects.first()
@@ -234,20 +306,33 @@ def upload_zip_view(request):
 
 @login_required
 def view_folders(request):
-    # Fetch folders associated with the user or all folders if you want admins to see everything
-    # For now, let's assume users only see their own folders or all folders. Adjust if needed.
-    # folders = ProteinFolder.objects.filter(user=request.user) # Option: Only user's folders
-    folders = ProteinFolder.objects.all().order_by('name') # Show all folders
-    folder_data = []
+    # Fetch all folders ordered by name
+    folders = ProteinFolder.objects.all().order_by('name')
 
+    # Annotate each folder queryset object with whether it contains any protein
+    # that has a non-null domain_csv_path. This is more efficient than looping
+    # and querying inside the loop for each folder.
+    folders = folders.annotate(
+        has_architecture_data=Exists(
+            Protein.objects.filter(
+                folder=OuterRef('pk'),
+                domain_csv_path__isnull=False
+                # Optionally add: .exclude(domain_csv_path__exact='') if empty strings are possible and unwanted
+            )
+        )
+    )
+
+    folder_data = []
     for folder in folders:
-        total_proteins = folder.proteins.count()
-        # Count annotations specifically for the current user and this folder
+        # Get counts (consider optimizing if many proteins per folder)
+        total_proteins = folder.proteins.count() # Could potentially be optimized further if needed
         annotated_count = Annotation.objects.filter(folder=folder, user=request.user).count()
+
         is_complete = total_proteins > 0 and total_proteins == annotated_count
 
         folder_data.append({
             'folder': folder,
+            'is_architecture': folder.has_architecture_data, # Use the annotated value
             'is_complete': is_complete,
             'total_proteins': total_proteins,
             'annotated_count': annotated_count,
@@ -265,127 +350,160 @@ def signup_view(request):
         form = CustomUserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
-
+# --- Annotation Routing View ---
 @login_required
-def annotate_protein_view(request, folder_id, protein_pk=None): # Add protein_pk=None
+@ensure_csrf_cookie # Ensure CSRF cookie is set for AJAX POSTs
+def annotate_protein_view(request, folder_id, protein_pk=None):
     user = request.user
     folder = get_object_or_404(ProteinFolder, id=folder_id)
-    proteins_qs = Protein.objects.filter(folder=folder).order_by('protein_id') # Ensure consistent order
+    proteins_qs = Protein.objects.filter(folder=folder).order_by('protein_id')
 
     protein_to_annotate = None
-    is_specific_redo = False # Flag to know if we loaded a specific protein
+    is_specific_redo = False
 
     if protein_pk:
-        # If a specific protein PK is provided, load that protein
         protein_to_annotate = get_object_or_404(Protein, pk=protein_pk, folder=folder)
-        # Optional: Add checks here if you need to verify user permissions for this specific protein/folder
         is_specific_redo = True
-        messages.info(request, f"Re-annotating specific protein: {protein_to_annotate.protein_id}") # Optional feedback
+        messages.info(request, f"Re-annotating specific protein: {protein_to_annotate.protein_id}")
     else:
-        # Original logic: Find the next unannotated protein
+        # Find the next protein that does NOT have a standard Annotation record by this user
         if not proteins_qs.exists():
             messages.warning(request, f"Folder '{folder.name}' contains no proteins.")
             return redirect('annotations_app:view_folders')
 
-        annotated_ids = Annotation.objects.filter(user=user, folder=folder).values_list('protein__id', flat=True)
-        protein_to_annotate = proteins_qs.exclude(id__in=annotated_ids).first()
+        # Get IDs of proteins already annotated by this user in this folder
+        annotated_protein_pks = Annotation.objects.filter(
+            user=user,
+            folder=folder
+        ).values_list('protein_id', flat=True) # Use protein_id (PK)
+
+        protein_to_annotate = proteins_qs.exclude(pk__in=annotated_protein_pks).first()
 
         if not protein_to_annotate:
             messages.info(request, f"You have completed annotating all proteins in folder '{folder.name}'.")
             return redirect('annotations_app:annotation_overview', folder_id=folder.id)
 
-    # --- Common logic for both cases ---
     if not protein_to_annotate:
-         # This case should ideally not be reached if logic above is correct, but as a fallback:
          messages.error(request, "Could not find a protein to annotate.")
          return redirect('annotations_app:view_folders')
 
+    # --- Check if it has architecture data ---
+    is_architecture = bool(protein_to_annotate.domain_csv_path)
+    domain_data = None
+    csv_error = None
 
-    # Prepare context
+    # --- Prepare base context ---
     context = {
         'protein': protein_to_annotate,
         'media_url': settings.MEDIA_URL,
         'annotation_title': folder.title,
         'annotation_description': folder.description,
-        'folder': folder, # Pass the whole folder object
+        'folder': folder,
         'folder_id': folder.id,
-        'is_specific_redo': is_specific_redo, # Pass the flag to the template
+        'is_specific_redo': is_specific_redo,
+         # Add pdb_url and cleaned_pdb_path (relative)
+        'pdb_url': None,
+        'cleaned_pdb_path': None,
     }
 
-    # Clean up pdb_file_path (same robust cleaning as before)
+    # --- Add PDB path/URL to context ---
     if protein_to_annotate.pdb_file_path:
         try:
-            # Using default_storage.url might be simpler if configured correctly
-            # context['pdb_url'] = default_storage.url(protein_to_annotate.pdb_file_path)
-            # Manual relative path construction:
+            context['pdb_url'] = default_storage.url(protein_to_annotate.pdb_file_path)
             base_media_path = os.path.join(settings.MEDIA_ROOT, '')
             pdb_full_path = default_storage.path(protein_to_annotate.pdb_file_path)
             relative_path = os.path.relpath(pdb_full_path, base_media_path)
-            # Ensure forward slashes for URL compatibility
-            protein_to_annotate.cleaned_pdb_path = relative_path.replace(os.path.sep, '/')
+            context['cleaned_pdb_path'] = relative_path.replace(os.path.sep, '/')
         except Exception as e:
-             logging.error(f"Error processing PDB path '{protein_to_annotate.pdb_file_path}': {e}")
+             logger.error(f"Error processing PDB path '{protein_to_annotate.pdb_file_path}': {e}")
              messages.error(request, "Error finding the PDB file path.")
-             # Decide how to handle - maybe show error on page or redirect
-             protein_to_annotate.cleaned_pdb_path = None # Indicate path issue
+             # Keep paths as None in context
 
-    # Pass the cleaned path to the template if using manual construction
-    context['cleaned_pdb_path'] = getattr(protein_to_annotate, 'cleaned_pdb_path', None)
+    # --- Process based on type ---
+    if is_architecture:
+        domain_data, csv_error = parse_domain_csv(protein_to_annotate)
+        if csv_error:
+            messages.error(request, f"Error processing domain data for {protein_to_annotate.protein_id}: {csv_error}")
+        context['domain_data'] = domain_data
+        context['csv_error'] = csv_error
+        template_name = 'annotations_app/architecture.html'
+    else:
+        # No specific context needed for standard annotation beyond base context
+        template_name = 'annotations_app/annotate.html'
 
-    return render(request, 'annotations_app/annotate.html', context)
+    return render(request, template_name, context)
+
 
 
 @login_required
+@require_POST
+# No CSRF exempt needed if token is sent correctly via JS
 def submit_annotation(request):
+    """ Handles standard Correct/Wrong/Unsure submissions from annotate.html """
     try:
-        if request.method == "POST":
-            data = json.loads(request.body)
-            protein_id = data.get("protein_id")
-            folder_id = data.get("folder_id")
-            direction = data.get("annotation")
-            user = request.user
+        data = json.loads(request.body)
+        protein_id = data.get("protein_id") # Use protein_id from JS
+        protein_pk = data.get("protein_pk") # Or PK if available
+        folder_id = data.get("folder_id")
+        direction = data.get("annotation") # 'left', 'right', 'down'
+        user = request.user
 
-            if not protein_id or not direction or not folder_id:
-                return JsonResponse({"error": "Missing data"}, status=400)
+        required_fields = {'folder_id': folder_id, 'annotation': direction}
+        if not (protein_id or protein_pk):
+             required_fields['protein_id_or_pk'] = None # Indicate missing protein identifier
 
-            direction_map = {
-                "right": "correct",
-                "left": "wrong",
-                "down": "unsure"
+        missing = [k for k, v in required_fields.items() if v is None]
+        if missing:
+             return JsonResponse({"error": f"Missing data: {', '.join(missing)}"}, status=400)
+
+
+        direction_map = { "right": "correct", "left": "wrong", "down": "unsure" }
+        if direction not in direction_map:
+            return JsonResponse({"error": "Invalid annotation direction"}, status=400)
+
+        # --- Find Protein ---
+        try:
+             # Prioritize PK if provided
+             if protein_pk:
+                 protein = Protein.objects.get(pk=protein_pk, folder_id=folder_id)
+             elif protein_id:
+                 protein = Protein.objects.get(protein_id=protein_id, folder_id=folder_id)
+             else:
+                 # This case should be caught by the missing check above, but as fallback:
+                 return JsonResponse({"error": "Missing protein identifier (ID or PK)"}, status=400)
+        except Protein.DoesNotExist:
+            error_msg = f"Protein PK={protein_pk}" if protein_pk else f"Protein ID='{protein_id}'"
+            return JsonResponse({"error": f"{error_msg} not found in folder ID={folder_id}"}, status=404)
+        except Protein.MultipleObjectsReturned:
+            # This really should only happen if using protein_id and it's not unique within the folder
+             logger.error(f"Multiple proteins found for id={protein_id} in folder={folder_id}")
+             return JsonResponse({"error": "Internal Server Error: Duplicate protein ID found"}, status=500)
+
+
+        folder = protein.folder
+        title = folder.title if folder else ""
+
+        # --- Create or update standard Annotation ---
+        annotation, created = Annotation.objects.update_or_create(
+            protein=protein,
+            user=user,
+            defaults={
+                "folder": folder,
+                "annotation_title": title,
+                "given_annotation": direction_map[direction],
+                # Ensure timestamp is updated on modification
+                "timestamp": timezone.now()
             }
+        )
 
-            if direction not in direction_map:
-                return JsonResponse({"error": "Invalid annotation direction"}, status=400)
+        return JsonResponse({"success": True})
 
-            # Get protein scoped by folder
-            protein = Protein.objects.get(protein_id=protein_id, folder_id=folder_id)
-            folder = protein.folder
-            title = folder.title if folder else ""
-
-            # Create or update annotation
-            Annotation.objects.update_or_create(
-                protein=protein,
-                user=user,
-                defaults={
-                    "folder": folder,
-                    "annotation_title": title,
-                    "given_annotation": direction_map[direction]
-                }
-            )
-
-            return JsonResponse({"success": True})
-
-        return JsonResponse({"error": "Invalid request method"}, status=405)
-
-    except Protein.DoesNotExist:
-        return JsonResponse({"error": "Protein not found"}, status=404)
-    except Protein.MultipleObjectsReturned:
-        return JsonResponse({"error": "Multiple proteins found with same ID — specify folder"}, status=400)
+    except json.JSONDecodeError:
+         return JsonResponse({"error": "Invalid JSON data"}, status=400)
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error("Annotation failed:\n%s", e, exc_info=True)
-        return JsonResponse({"error": str(e)}, status=500)
+        logger.error(f"Standard Annotation submission failed: {e}", exc_info=True)
+        return JsonResponse({"error": f"An unexpected server error occurred: {str(e)}"}, status=500)
+
 
 
 
@@ -411,22 +529,47 @@ def download_annotations_csv(request, folder_id):
     return response
 
 
+# --- Standard Annotation Undo (Keep as is, maybe adjust redirect/response) ---
 @require_POST
 @login_required
 def undo_annotation(request):
+    """ Undoes the last *standard* annotation """
     user = request.user
     try:
+        # Find the most recent standard annotation by this user
         last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
         protein = last_annotation.protein
+        folder_id = protein.folder_id
+
         last_annotation.delete()
+
+        messages.info(request, f"Removed last annotation for protein {protein.protein_id}.")
+
+        # Option 1: Respond with JSON (preferred if JS handles UI update without reload)
         return JsonResponse({
-            "success": True,
-            "protein_id": protein.protein_id,
-            "pdb_file_path": protein.pdb_file_path,
-            "name": protein.name,
-        })
+             "success": True,
+             "message": f"Annotation for {protein.protein_id} removed.",
+             "protein_pk": protein.pk,
+             "folder_id": folder_id,
+         })
+
+        # Option 2: Redirect back to the specific protein's annotation page (causes full reload)
+        # return redirect('annotations_app:annotate_specific_protein', folder_id=folder_id, protein_pk=protein.pk)
+
     except Annotation.DoesNotExist:
-        return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+         # Option 1: JSON error
+         return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+         # Option 2: Message and redirect
+         # messages.error(request, "No previous annotation found to undo.")
+         # return redirect('annotations_app:view_folders') # Fallback
+    except Exception as e:
+        logger.error(f"Error during standard undo: {e}", exc_info=True)
+        # Option 1: JSON error
+        return JsonResponse({"success": False, "error": f"Server error: {str(e)}"}, status=500)
+        # Option 2: Message and redirect
+        # messages.error(request, "An error occurred while trying to undo.")
+        # return redirect('annotations_app:view_folders')
+
 
 
 @login_required
@@ -502,3 +645,206 @@ def redo_folder_view(request, folder_id):
 
     # Redirect to the first protein annotation page for this folder
     return redirect('annotations_app:annotate_protein', folder_id=folder.id)
+
+    # Renamed original submission view
+@login_required
+@require_POST # Should be POST
+@csrf_exempt # Keep if using simple JS fetch without explicit CSRF header setup
+def submit_standard_annotation(request):
+    # This view now ONLY handles the simple Correct/Wrong/Unsure annotations
+    try:
+        if request.method == "POST":
+            data = json.loads(request.body)
+            protein_pk = data.get("protein_pk") # Prefer PK if available and unique
+            protein_id = data.get("protein_id")
+            folder_id = data.get("folder_id")
+            direction = data.get("annotation") # left, right, down
+            user = request.user
+
+            if not (protein_pk or protein_id) or not direction or not folder_id:
+                return JsonResponse({"error": "Missing data (protein_pk/id, folder_id, annotation)"}, status=400)
+
+            direction_map = { "right": "correct", "left": "wrong", "down": "unsure" }
+            if direction not in direction_map:
+                return JsonResponse({"error": "Invalid annotation direction"}, status=400)
+
+            # --- Find Protein ---
+            try:
+                if protein_pk:
+                     protein = Protein.objects.get(pk=protein_pk, folder_id=folder_id)
+                else:
+                     # Fallback to protein_id, ensure it's unique within folder
+                     protein = Protein.objects.get(protein_id=protein_id, folder_id=folder_id)
+            except Protein.DoesNotExist:
+                return JsonResponse({"error": "Protein not found in specified folder"}, status=404)
+            except Protein.MultipleObjectsReturned:
+                 # This shouldn't happen if using PK, but handle for protein_id case
+                 logger.error(f"Multiple proteins found for id={protein_id} in folder={folder_id}")
+                 return JsonResponse({"error": "Internal Server Error: Duplicate protein ID found"}, status=500)
+
+
+            folder = protein.folder
+            title = folder.title if folder else ""
+
+            # --- Create or update standard Annotation ---
+            # NOTE: For architecture annotations, this record marks the protein as "reviewed"
+            annotation, created = Annotation.objects.update_or_create(
+                protein=protein,
+                user=user,
+                defaults={
+                    "folder": folder,
+                    "annotation_title": title,
+                    "given_annotation": direction_map[direction]
+                }
+            )
+            # Update timestamp manually if updating
+            if not created:
+                annotation.timestamp = timezone.now() # Requires: from django.utils import timezone
+                annotation.save(update_fields=['timestamp', 'given_annotation'])
+
+            return JsonResponse({"success": True})
+
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+    except json.JSONDecodeError:
+         return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except Exception as e:
+        logger.error(f"Standard Annotation failed: {e}", exc_info=True)
+        return JsonResponse({"error": f"An unexpected error occurred: {str(e)}"}, status=500)
+
+
+# --- NEW VIEW: Domain Correction Submission ---
+@login_required
+@require_POST
+def submit_domain_correction(request):
+    """Handles saving domain corrections marked as wrong from architecture.html."""
+    try:
+        data = json.loads(request.body)
+        protein_pk = data.get("protein_pk")
+        folder_id = data.get("folder_id")
+        corrections = data.get("corrections") # Expect list of {name, start, end}
+        user = request.user
+
+        if not protein_pk or not isinstance(corrections, list) or folder_id is None:
+            return JsonResponse({"error": "Missing data (protein_pk, folder_id, corrections list)"}, status=400)
+
+        # --- Get Protein ---
+        try:
+            protein = Protein.objects.get(pk=protein_pk, folder_id=folder_id)
+        except Protein.DoesNotExist:
+            return JsonResponse({"error": "Protein not found in the specified folder"}, status=404)
+
+        # --- Save Corrections and Mark as Reviewed ---
+        saved_count = 0
+        errors = []
+        with transaction.atomic():
+            # 1. Delete previous corrections for this user/protein (start fresh)
+            # DomainCorrection.objects.filter(user=user, protein=protein).delete()
+            # Or upsert if you want to track unmarking later
+
+            # 2. Create new corrections based on submitted list
+            for correction_data in corrections:
+                domain_name = correction_data.get('name')
+                start_pos = correction_data.get('start')
+                end_pos = correction_data.get('end')
+
+                if not all([domain_name, isinstance(start_pos, int), isinstance(end_pos, int)]):
+                    errors.append(f"Invalid data format for correction: {correction_data}")
+                    continue
+
+                try:
+                    # Use update_or_create to handle potential re-submissions
+                    DomainCorrection.objects.update_or_create(
+                        protein=protein,
+                        user=user,
+                        domain_name=domain_name,
+                        start_pos=start_pos,
+                        end_pos=end_pos,
+                        defaults={'is_marked_wrong': True} # Ensure it's marked
+                    )
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(f"Error saving domain correction for {domain_name} ({start_pos}-{end_pos}): {e}", exc_info=True)
+                    errors.append(f"Server error saving correction for '{domain_name}'.")
+
+            # 3. Create/Update the standard Annotation record to mark as reviewed
+            # We use 'correct' as a placeholder meaning "processed/reviewed"
+            if not errors: # Only mark as reviewed if corrections saved without error
+                 annotation, created = Annotation.objects.update_or_create(
+                     protein=protein,
+                     user=user,
+                     defaults={
+                         "folder": protein.folder,
+                         "annotation_title": protein.folder.title,
+                         "given_annotation": 'correct', # Mark as reviewed
+                         "timestamp": timezone.now()
+                     }
+                 )
+            else:
+                 # If errors occurred saving corrections, do NOT mark as reviewed
+                 # The transaction will roll back the correction saves anyway
+                 logger.warning(f"Skipping marking protein {protein_pk} as reviewed due to domain correction errors.")
+                 # Raise an exception to ensure transaction rollback if not already happening
+                 raise IntegrityError("Failed to save domain corrections.")
+
+
+        # If we reach here without errors, transaction committed
+        return JsonResponse({
+            "success": True,
+            "message": f"Saved {saved_count} domain corrections. Protein marked as reviewed."
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except IntegrityError as e: # Catch the explicit raise from the transaction block
+        return JsonResponse({"error": f"Failed to save corrections: {str(e)}", "details": errors}, status=400)
+    except Exception as e:
+        logger.error(f"Domain Correction submission failed unexpectedly: {e}", exc_info=True)
+        return JsonResponse({"error": f"An unexpected server error occurred: {str(e)}"}, status=500)
+
+
+# ... (keep download_annotations_csv, undo_standard_annotation, annotation_overview, redo_folder_view)
+
+# Renamed original undo view
+@require_POST
+@login_required
+# @csrf_exempt # Better to handle CSRF properly
+def undo_standard_annotation(request):
+    """ Undoes the last *standard* annotation (correct/wrong/unsure) """
+    user = request.user
+    try:
+        # Find the last standard annotation by this user
+        last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
+        protein = last_annotation.protein
+        folder_id = protein.folder_id # Get folder ID for redirect
+        last_annotation.delete()
+
+        messages.info(request, f"Removed last annotation for protein {protein.protein_id}.")
+
+        # Redirect back to the specific protein's annotation page
+        return redirect('annotations_app:annotate_specific_protein', folder_id=folder_id, protein_pk=protein.pk)
+
+        # --- OR --- return JSON if handled purely by JS without reload
+        # return JsonResponse({
+        #     "success": True,
+        #     "message": f"Annotation for {protein.protein_id} removed.",
+        #     # Optionally send back data needed to re-render the protein in JS
+        #     # "protein_pk": protein.pk,
+        #     # "folder_id": folder_id,
+        # })
+
+    except Annotation.DoesNotExist:
+         messages.error(request, "No previous annotation found to undo.")
+         # Try to find the last folder the user interacted with if possible, or fallback
+         last_folder = ProteinFolder.objects.filter(user=user).order_by('-created_at').first()
+         if last_folder:
+             return redirect('annotations_app:view_folders') # Or maybe overview of last folder?
+         else:
+             return redirect('annotations_app:view_folders')
+
+        # --- OR --- return JSON error
+        # return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
+    except Exception as e:
+        logger.error(f"Error during standard undo: {e}", exc_info=True)
+        messages.error(request, "An error occurred while trying to undo.")
+        return redirect('annotations_app:view_folders') # Fallback redirect
