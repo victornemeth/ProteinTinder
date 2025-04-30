@@ -28,6 +28,7 @@ from django.db.models import Exists, OuterRef
 import csv
 from django.http import HttpResponse
 from collections import defaultdict
+from django.utils.encoding import smart_str  # To ensure UTF-8 strings
 
 
 logger = logging.getLogger(__name__)
@@ -527,10 +528,10 @@ def download_annotations_csv(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
     annotations = Annotation.objects.filter(folder=folder).select_related('user', 'protein')
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="annotations_{folder.name}.csv"'
+    response = HttpResponse(content_type='text/tab-separated-values; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="annotations_{folder.name}.tsv"'
 
-    writer = csv.writer(response)
+    writer = csv.writer(response, delimiter='\t')
     writer.writerow(['Username', 'Protein ID', 'Annotation', 'Timestamp'])
 
     for annotation in annotations:
@@ -906,25 +907,51 @@ def download_domain_corrections_csv(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
     user = request.user
 
+    # Get all annotated proteins
+    annotated_protein_ids = Annotation.objects.filter(
+        folder=folder,
+        user=user
+    ).values_list('protein_id', flat=True)
+
+    proteins = Protein.objects.filter(folder=folder, pk__in=annotated_protein_ids)
     corrections = DomainCorrection.objects.filter(
-        protein__folder=folder,
         user=user,
+        protein__in=proteins,
         is_marked_wrong=True
-    ).select_related('protein').order_by('protein__protein_id')
+    ).select_related('protein')
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="domain_corrections_{folder.name}.csv"'
+    from collections import defaultdict
+    protein_to_corrections = defaultdict(list)
+    for corr in corrections:
+        protein_to_corrections[corr.protein].append(corr)
 
-    writer = csv.writer(response)
-    writer.writerow(['Protein ID', 'Domain Name', 'Start', 'End'])
+    # --- TSV response ---
+    response = HttpResponse(content_type='text/tab-separated-values; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="architecture_overview_{folder.name}.tsv"'
 
-    for correction in corrections:
+    writer = csv.writer(response, delimiter='\t')
+    writer.writerow(['User', 'Protein ID', 'Status', 'Marked Domains', 'Domain Ranges'])
+
+    for protein in sorted(proteins, key=lambda p: p.protein_id):
+        domain_list = protein_to_corrections.get(protein, [])
+
+        if domain_list:
+            status = f"{len(domain_list)} domain(s) marked"
+            domain_names = [smart_str(d.domain_name) for d in domain_list]
+            domain_ranges = [f"{d.start_pos}-{d.end_pos}" for d in domain_list]
+        else:
+            status = "No domains marked"
+            domain_names = []
+            domain_ranges = []
+
         writer.writerow([
-            correction.protein.protein_id,
-            correction.domain_name,
-            correction.start_pos,
-            correction.end_pos
+            user.username,
+            protein.protein_id,
+            status,
+            str(domain_names),
+            str(domain_ranges)
         ])
 
     return response
+
 
