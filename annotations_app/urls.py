@@ -33,4 +33,7 @@ urlpatterns = [
     # --- Redirects/Helpers ---
     path("annotate/", views.redirect_to_annotate, name="redirect_to_annotate"), # Redirects to first available folder/protein
 
+    path('folder/<int:folder_id>/architecture-overview/', views.architecture_annotation_overview, name='architecture_annotation_overview'),
+
+
 ]

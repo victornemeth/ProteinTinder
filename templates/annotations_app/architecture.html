@@ -1,393 +1,632 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {# --- Essential Meta Tags --- #}
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>Annotate Architecture: {% if protein %}{{ protein.protein_id }}{% else %}Not Found{% endif %}</title>
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ annotation_title }} - {{ protein.protein_id }} (Architecture){% endblock %}
+{% block content %}
+  <script src="https://cdn.jsdelivr.net/npm/ngl@2.0.0-dev.39/dist/ngl.js"></script>
+  <style>
+    .architecture-view .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 15px;
+    }
 
-    {# --- 3Dmol.js Library --- #}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
+    h1 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      color: #212529;
+      text-align: center;
+    }
 
-    {# --- CSS Styles (Copied from previous version or adapt as needed) --- #}
-    <style>
-        /* Basic styles - Adapt from annotate.html or create new */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8f9fa; margin: 0; padding: 20px; color: #343a40;}
-        .container-arch-main { max-width: 1300px; margin: 10px auto; padding: 15px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .messages {
+      list-style: none;
+      padding: 0;
+      margin: 15px auto;
+      max-width: 800px;
+      text-align: center;
+    }
+    .messages li {
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .messages li.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .messages li.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .messages li.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .messages li.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
 
-        /* --- Page Header Copy from annotate.html for consistency --- */
-        .page-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;
-        }
-        .page-header h1 { font-size: 1.6em; margin: 0; color: #212529; font-weight: 600;}
-        .auth-bar { font-size: 0.875em; color: #6c757d; white-space: nowrap; }
-        .auth-bar span { margin-right: 5px; }
-        .auth-bar form { display: inline; }
-        .auth-bar button, .auth-bar a {
-            background: none; border: none; color: #007bff; cursor: pointer;
-            padding: 0; font: inherit; font-size: 1em; text-decoration: none; margin-left: 5px;
-        }
-        .auth-bar button:hover, .auth-bar a:hover { text-decoration: underline; }
-        /* --- End Page Header --- */
+    #viewport {
+      width: 100%;
+      height: 55vh;
+      margin: 0 auto 20px;
+      border-radius: 10px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      background-color: white;
+      position: relative;
+    }
 
-        .arch-header { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;}
-        .arch-header h2 { margin-top: 0; color: #343a40; }
-        .arch-header p { color: #6c757d; font-size: 0.95em; margin-bottom: 5px;}
+    .controls, .action-buttons {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
 
-        .container-arch-content { display: flex; gap: 25px; flex-wrap: wrap; }
-        .viewer-panel { flex: 3; min-width: 550px; min-height: 550px; border: 1px solid #dee2e6; position: relative; background-color: white; border-radius: 6px; }
-        .domain-panel { flex: 1; min-width: 300px; max-height: 550px; /* Limit height */ background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; overflow-y: auto; border-radius: 6px; }
-        #pdbViewerArch { width: 100%; height: 550px; /* Match min-height */ border-radius: 6px; } /* Add radius */
 
-        .domain-panel h4 { margin-top: 0; color: #495057; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;}
-        .domain-list { list-style: none; padding: 0; margin: 0; }
-        .domain-item {
-            padding: 8px 10px; margin-bottom: 8px; border: 1px solid #e0e0e0; background-color: white;
-            border-radius: 5px; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease;
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 0.9em; /* Slightly smaller */
-        }
-        .domain-item:hover { background-color: #e9ecef; }
-        .domain-item.selected { background-color: #cfe2ff; border-color: #9ec5fe; font-weight: 500; }
-        .domain-item.marked-wrong { background-color: #f8d7da; border-color: #f5c6cb; }
-        .domain-item.marked-wrong .domain-name { text-decoration: line-through; color: #721c24;}
-        .domain-name { font-weight: 500; color: #212529; margin-right: 5px;}
-        .domain-range { font-size: 0.9em; color: #6c757d; }
 
-        .mark-wrong-btn {
-            padding: 3px 8px; font-size: 0.8em; color: #dc3545; background-color: transparent;
-            border: 1px solid #f1aeae; border-radius: 4px; cursor: pointer; margin-left: 10px;
-            transition: background-color 0.2s, color 0.2s, border-color 0.2s; white-space: nowrap;
-        }
-        .mark-wrong-btn:hover { background-color: #dc3545; color: white; border-color: #dc3545;}
-        .mark-wrong-btn.marked { background-color: #c82333; color: white; border-color: #c82333; }
+    select {
+      padding: 8px;
+      font-size: 1rem;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
 
-        .action-bar { text-align: center; margin-top: 25px; border-top: 1px solid #e9ecef; padding-top: 20px; }
-        .action-button { padding: 10px 20px; font-size: 1em; cursor: pointer; border-radius: 5px; border: 1px solid; margin: 0 8px; font-weight: 500;}
-        .save-next-btn { background-color: #198754; color: white; border-color: #198754; } /* Bootstrap green */
-        .save-next-btn:hover { background-color: #157347; }
-        .save-next-btn:disabled { background-color: #6c757d; border-color: #6c757d; cursor: not-allowed;}
-        .overview-btn { background-color: #0d6efd; color: white; border-color: #0d6efd; text-decoration: none;} /* Bootstrap blue */
-        .overview-btn:hover { background-color: #0b5ed7; }
+    #domain-bar-container {
+      width: 100%;
+      margin: 25px 0;
+    }
+    #domain-bar {
+      width: 100%;
+      height: 30px;
+      background-color: #e0e0e0;
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #ccc;
+    }
 
-        .error-message { color: #dc3545; font-weight: bold; padding: 12px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; margin-bottom: 15px; text-align: center;}
-        .loading-message, .viewer-message { text-align: center; padding: 40px; font-size: 1.1em; color: #6c757d;}
+    .domain-segment {
+      position: absolute;
+      height: 100%;
+      top: 0;
+      cursor: pointer;
+      transition: opacity 0.3s, border 0.3s;
+      box-sizing: border-box;
+      border: 1px solid rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
-         /* --- Footer --- Copied from annotate.html */
-         footer {
-            margin-top: 40px;
-            padding-top: 15px;
-            text-align: center;
-            font-size: 0.85em;
-            color: #adb5bd; /* Lighter grey */
-            border-top: 1px solid #e9ecef;
-        }
+    .domain-segment.wrong {
+      opacity: 0.4;
+      border: 2px solid red !important;
+    }
+
+    #status-message {
+      text-align: center;
+      margin-top: 15px;
+      font-weight: bold;
+    }
     </style>
-
-</head>
-<body>
-
-<div class="container-arch-main">
-    {# --- Header section - Copied from annotate.html --- #}
+<div class="architecture-view">
+  <div class="container">
     <div class="page-header">
-        <h1>{{ annotation_title|default:"Protein Annotation" }}</h1> {# Use the specific annotation title #}
+        <h1>{{ annotation_title }} - {{ protein.protein_id }}</h1>
         <div class="auth-bar">
             {% if user.is_authenticated %}
-                <span>{{ user.username }}</span> |
-                <form id="logoutForm" method="post" action="{% url 'logout' %}" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Logout</button>
-                </form>
             {% else %}
-                <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
+                <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
                 <a href="{% url 'signup' %}">Sign Up</a>
             {% endif %}
         </div>
     </div>
-    {# --- End Header section --- #}
 
-
-    <div class="arch-header">
-        <h2>Annotate Architecture: {{ protein.protein_id }}</h2>
-        {% if annotation_description %}<p>{{ annotation_description }}</p>{% endif %}
-    </div>
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 
     {% if csv_error %}
-        <div class="error-message">
-            Could not load domain data: {{ csv_error }} <br>
-            Cannot proceed with architecture annotation for this protein.
-            <div style="margin-top: 15px;">
-                 <a href="{% url 'annotations_app:view_folders' %}" class="action-button overview-btn">Back to Folders</a>
-            </div>
-        </div>
-    {% elif not pdb_url %}
-        <div class="error-message">
-            PDB file URL is missing or could not be generated. Cannot display structure.
-             <div style="margin-top: 15px;">
-                 <a href="{% url 'annotations_app:view_folders' %}" class="action-button overview-btn">Back to Folders</a>
-             </div>
-        </div>
+    <div class="messages">
+      <li class="error">Warning: {{ csv_error }}</li>
+    </div>
+    {% endif %}
+
+    <div id="viewport"></div>
+
+    <div class="controls">
+      <button id="toggleSpinBtn">Pause Rotation</button>
+      <label for="styleSelect">Style:</label>
+      <select id="styleSelect">
+        <option value="cartoon">Cartoon</option>
+        <option value="spacefill">Spacefill</option>
+        <option value="licorice">Licorice</option>
+        <option value="ball+stick">Ball+Stick</option>
+        <option value="ribbon">Ribbon</option>
+        <option value="trace">Trace</option>
+        <option value="tube">Tube</option>
+        <option value="line">Line</option>
+        <option value="point">Point</option>
+        <option value="backbone">Backbone</option>
+        <option value="base">Base</option>
+        <option value="hyperball">Hyperball</option>
+      </select>
+    </div>
+
+    {% if domain_data %}
+      <h2 style="text-align:center; font-size: 1.3rem; color: #444;">Domains (Click bar to mark incorrect)</h2>
+      <div id="domain-bar-container">
+        <div id="domain-bar"></div>
+      </div>
     {% else %}
-        {# --- Main Content: Viewer and Domain List --- #}
-        <div class="container-arch-content">
-            <div class="viewer-panel">
-                <div id="pdbViewerArch">
-                    <p class="loading-message">Loading 3D Viewer...</p>
-                    {# Error messages from JS will be inserted here #}
-                </div>
-            </div>
-            <div class="domain-panel">
-                <h4>Domains</h4>
-                {% if domain_data %}
-                    <p style="font-size: 0.85em; color: #6c757d; margin-top:-5px; margin-bottom:10px;">Click domain to highlight. Mark incorrect domains.</p>
-                    <ul class="domain-list" id="domainList">
-                        {% for domain in domain_data %}
-                        <li class="domain-item"
-                            data-domain-id="{{ domain.id }}"
-                            data-domain-name="{{ domain.name|escape }}"
-                            data-start-res="{{ domain.start }}"
-                            data-end-res="{{ domain.end }}">
-                            <span title="{{ domain.name }} ({{ domain.start }}-{{ domain.end }})">
-                                <span class="domain-name">{{ domain.name }}</span>
-                                <span class="domain-range">({{ domain.start }}-{{ domain.end }})</span>
-                            </span>
-                            <button class="mark-wrong-btn" data-domain-id="{{ domain.id }}">Mark Wrong</button>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="viewer-message">No domain data loaded from CSV.</p>
-                {% endif %}
-            </div>
-        </div> {# End container-arch-content #}
+      <h2 style="text-align:center; font-size: 1.3rem; color: #444;">Domains</h2>
+      <p style="text-align:center;">No domain data available to display.</p>
+    {% endif %}
 
-        {# --- Action Buttons --- #}
-        <div class="action-bar">
-            <button id="saveNextBtn" class="action-button save-next-btn">Save Corrections & Next</button>
-            <a href="{% url 'annotations_app:annotation_overview' folder_id=folder.id %}" class="action-button overview-btn">Folder Overview</a>
-        </div>
+    <div class="action-buttons">
+      <button id="saveBtn">Save & Go Next</button>
+      <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" id="nextBtn" class="button secondary">Skip & Go Next</a>
+      <button id="undoBtn" class="button secondary">↩️ Undo Last</button>
 
-    {% endif %} {# End of main content conditional block #}
+      <a href="{% url 'annotations_app:architecture_annotation_overview' folder_id=folder.id %}" class="button secondary">Overview</a>
+    </div>
 
-    {# --- Footer --- Copied from annotate.html #}
-    <footer>
-        <p><small>Annotation Tool © 2025</small></p>
-    </footer>
-
-</div> {# End container-arch-main #}
-
-
-{# Pass domain data to JavaScript #}
-{% if domain_data and not csv_error and pdb_url %}
-    {{ domain_data|json_script:"domain-data-json" }}
-{% endif %}
-
-{# --- Main JavaScript Logic --- #}
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    // Only run if the main content was rendered (no fatal errors)
-    const viewerElement = document.getElementById("pdbViewerArch");
-    const domainListElement = document.getElementById("domainList");
-    const saveNextButton = document.getElementById("saveNextBtn");
-    const domainDataScript = document.getElementById('domain-data-json');
-
-    // Exit if essential elements/data aren't present
-    if (!viewerElement || !domainListElement || !saveNextButton || !domainDataScript) {
-        console.log("Architecture annotation elements not found, skipping JS init.");
-        return;
-    }
-    // Also check if the viewer isn't already showing an error
-    if (viewerElement.querySelector('.error-message')) {
-         console.log("Viewer already contains an error message, skipping JS init.");
-         return;
-    }
-
-    // --- Config ---
-    const proteinPk = "{{ protein.pk|escapejs }}";
-    const folderId = "{{ folder.id|escapejs }}";
-    const pdbUrl = "{{ pdb_url|escapejs }}";
-    const isSpecificRedo = {{ is_specific_redo|yesno:"true,false" }};
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    let viewer = null;
-    let domainData = JSON.parse(domainDataScript.textContent || '[]');
-    let markedWrong = new Set();
-    let currentSelection = null;
-
-    if (!csrfToken) {
-        console.error("CSRF token not found!");
-        alert("Error: CSRF token missing. Cannot save annotations.");
-        if(saveNextButton) saveNextButton.disabled = true;
-    }
-
-    // --- Initialize 3Dmol Viewer ---
-    if (pdbUrl) {
-        try {
-            // $3Dmol should be defined now because the script tag is in the <head>
-            viewer = $3Dmol.createViewer(viewerElement, {
-                defaultcolors: $3Dmol.elementColors.rasmol,
-                backgroundColor: 'white',
-            });
-
-            const format = pdbUrl.split('?')[0].split('.').pop().toLowerCase();
-            const supportedFormats = ['pdb', 'cif', 'mcif', 'sdf', 'mol2'];
-            const fileFormat = supportedFormats.includes(format) ? format : (pdbUrl.includes('.cif') ? 'cif' : 'pdb');
-
-            $3Dmol.download(pdbUrl, viewer, { format: fileFormat })
-                .then(() => {
-                    viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
-                    viewer.zoomTo();
-                    viewer.render();
-                    console.log("3Dmol model loaded.");
-                    const loadingMsg = viewerElement.querySelector('.loading-message');
-                    if (loadingMsg) loadingMsg.remove();
+    <div id="status-message"></div>
+  </div>
+</div>
+  <!-- Keep JS block below unchanged, contains NGL & domain logic -->
+  <script>
+    // --- Configuration (from Django Context) ---
+    const pdbUrl = "{{ pdb_url|escapejs|default:'' }}";
+    // Ensure domainData is an empty array if null/None from backend
+    const domainData = {{ domain_data|default:'[]'|safe }};
+    const proteinPk = {{ protein.pk|default:'null' }}; // Use Protein Primary Key
+    const folderId = {{ folder.id|default:'null' }};
+    // URL for submitting the corrections (ensure URL name matches urls.py)
+    const saveUrl = "{% url 'annotations_app:submit_domain_correction' %}";
+    // URL to redirect to after successful save (goes back to find next protein)
+    const nextProteinFinderUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
+    document.addEventListener("DOMContentLoaded", () => {
+        const undoBtn = document.getElementById("undoBtn");
+        if (undoBtn) {
+            undoBtn.addEventListener("click", () => {
+                fetch("{% url 'annotations_app:undo' %}", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCookie("csrftoken")
+                    }
                 })
-                .catch(error => {
-                    viewerElement.innerHTML = `<p class='error-message'>Error loading structure: ${error}</p>`;
-                    console.error("3Dmol download error:", error);
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // Redirect back to the specific protein
+                        const folderId = data.folder_id;
+                        const proteinPk = data.protein_pk;
+                        if (folderId && proteinPk) {
+                            window.location.href = `/folder/${folderId}/annotate/${proteinPk}/`;
+                        } else {
+                            location.reload(); // Fallback reload
+                        }
+                    } else {
+                        alert("Undo failed: " + (data.error || "Unknown error"));
+                    }
+                })
+                .catch(err => {
+                    console.error("Undo error:", err);
+                    alert("Undo request failed.");
                 });
-        } catch(e) {
-             viewerElement.innerHTML = `<p class='error-message'>Error initializing 3D viewer: ${e}</p>`;
-             console.error("3Dmol init error:", e);
-        }
-    } else {
-         console.error("PDB URL missing for viewer initialization.");
-         // The Django template likely already showed an error message
-    }
-
-    // --- Domain List Interaction ---
-    domainListElement.addEventListener('click', function(event) {
-        const target = event.target;
-        const domainItem = target.closest('.domain-item');
-        if (!domainItem) return;
-
-        const domainId = domainItem.dataset.domainId;
-        const isMarkWrongButton = target.classList.contains('mark-wrong-btn');
-
-        if (isMarkWrongButton) {
-            event.stopPropagation();
-            toggleMarkWrong(domainId, domainItem, target);
-        } else {
-            const domain = domainData.find(d => d.id === domainId);
-            if (domain) {
-                selectDomain(domainItem, domain);
-            }
+            });
         }
     });
 
-    // --- Toggle Mark Wrong State ---
-    function toggleMarkWrong(domainId, itemElement, buttonElement) {
-        if (markedWrong.has(domainId)) {
-            markedWrong.delete(domainId);
-            itemElement.classList.remove('marked-wrong');
-            buttonElement.classList.remove('marked');
-            buttonElement.textContent = "Mark Wrong";
+
+    // --- NGL and State Variables ---
+    let stage;
+    let currentStructureComponent = null;
+    let isSpinning = true;
+    const spinSpeed = 0.01;
+    const spinAxis = [0, 1, 0];
+    let proteinLength = 0;
+    let domainIsWrong = []; // Parallel array to domainData, stores boolean status
+
+    // --- Color Palette ---
+    const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#8e44ad", "#34495e", "#f1c40f", "#c0392b", "#2980b9"];
+
+    // --- DOM Elements ---
+    const viewportDiv = document.getElementById("viewport");
+    const toggleSpinBtn = document.getElementById("toggleSpinBtn");
+    const styleSelect = document.getElementById("styleSelect");
+    const legendDiv = document.getElementById("legend");
+    const domainBarDiv = document.getElementById("domain-bar");
+    const saveBtn = document.getElementById("saveBtn");
+    const nextBtn = document.getElementById("nextBtn"); // The "Skip" button link
+    const statusMessageDiv = document.getElementById("status-message");
+
+    // --- Initialization ---
+    document.addEventListener("DOMContentLoaded", async () => {
+      // Basic checks
+      if (!proteinPk || !folderId) {
+          showStatus("Error: Missing protein or folder identifier. Cannot save.", "error");
+          disableControls();
+          return;
+      }
+      if (!pdbUrl && viewportDiv) {
+        viewportDiv.innerHTML = "<p style='color: red; text-align:center;'>PDB file not found or path is invalid.</p>";
+        // Don't necessarily disable controls if only PDB is missing but domains exist
+      }
+      if (!domainData || domainData.length === 0) {
+          console.warn("No domain data provided for protein PK:", proteinPk);
+          // Domain bar/legend are already hidden by Django template logic
+      }
+
+      // Initialize wrong status array
+      domainIsWrong = new Array(domainData.length).fill(false);
+
+      stage = new NGL.Stage("viewport", {
+          backgroundColor: "white",
+          fog: false
+       });
+
+      stage.setParameters({
+        backgroundColor: "white",
+        lightIntensity: 1.2,
+        ambientColor: 0xffffff,
+        cameraFov: 40,
+        clipNear: 0.1,
+        clipFar: 100,
+        fogNear: 100,
+        fogFar: 100 // force fog completely out of view
+      });
+
+
+      window.addEventListener("resize", () => stage.handleResize());
+
+      try {
+        if (pdbUrl) {
+            console.log("Loading structure from:", pdbUrl);
+            currentStructureComponent = await stage.loadFile(pdbUrl, { defaultRepresentation: false });
+            console.log("Structure loaded:", currentStructureComponent);
+            determineProteinLength(currentStructureComponent); // Calculate length after loading
         } else {
-            markedWrong.add(domainId);
-            itemElement.classList.add('marked-wrong');
-            buttonElement.classList.add('marked');
-            buttonElement.textContent = "Unmark";
+            console.warn("No PDB URL provided, cannot load 3D structure.");
+            // Still need to calculate protein length if possible (e.g., from domains)
+            determineProteinLength(null);
+            viewportDiv.innerHTML = "<p style='text-align:center; color: #555;'>3D structure not available.</p>";
         }
-        console.log("Marked wrong IDs:", Array.from(markedWrong)); // Log changes
+
+
+        // Initial rendering (even if structure failed, try to show domains/bar)
+        applyRepresentations(); // Renders NGL stuff if structure exists
+        createDomainBar();      // Renders domain bar
+
+        if (isSpinning && currentStructureComponent) {
+          stage.setSpin(spinAxis, spinSpeed);
+        }
+
+        setupEventListeners();
+
+      } catch (err) {
+        console.error("Error during NGL setup:", err);
+        if (viewportDiv) {
+             viewportDiv.innerHTML = `<p style="color: red; text-align:center;">Error loading structure: ${err.message || err}</p>`;
+        }
+        // Decide if controls should be disabled even if structure fails but domains exist
+        // disableControls();
+      }
+    });
+
+    // --- Core Functions ---
+
+    function determineProteinLength(structureComponent) {
+         // Method 1: From NGL structure (if loaded)
+         if (structureComponent && structureComponent.structure?.residueStore?.resno?.length > 0) {
+             try {
+                const resnoArray = structureComponent.structure.residueStore.resno;
+                proteinLength = Math.max(...resnoArray);
+                console.log("Protein length determined from NGL structure:", proteinLength);
+             } catch (e) {
+                 console.error("Error getting max residue number from NGL:", e);
+                 proteinLength = 0; // Reset if error
+             }
+         }
+
+         // Method 2: Fallback to max end from domain data
+         if (proteinLength <= 0 && domainData && domainData.length > 0) {
+              try {
+                 proteinLength = Math.max(...domainData.map(d => d.end));
+                 console.warn("Protein length estimated from max domain end:", proteinLength);
+              } catch (e) {
+                  console.error("Error getting max end from domain data:", e);
+                  proteinLength = 0;
+              }
+         }
+
+         // Final fallback
+         if (proteinLength <= 0) {
+             proteinLength = 1; // Avoid division by zero
+             console.error("Could not determine protein length accurately. Domain bar scaling might be approximate.");
+             // Optionally display a warning to the user
+             // showStatus("Warning: Could not determine exact protein length. Domain bar is approximate.", "warning");
+         }
     }
 
-    // --- Highlight Domain in 3Dmol ---
-    function selectDomain(itemElement, domain) {
-        if (!viewer || !domain) return;
+    function applyRepresentations() {
+      if (!currentStructureComponent) return; // Exit if no structure loaded
 
-        document.querySelectorAll('.domain-item.selected').forEach(el => el.classList.remove('selected'));
-        itemElement.classList.add('selected');
+      const style = styleSelect.value;
+      currentStructureComponent.removeAllRepresentations();
 
-        viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
-        viewer.removeAllLabels();
 
-        const selection = { resi: $3Dmol.range(domain.start, domain.end) };
-        const highlightColor = '#FFBF00'; // Amber/Gold
-        const style = { cartoon: { color: highlightColor, thickness: 1.5 } };
-
-        viewer.setStyle(selection, style);
-        viewer.addResidueLabels(`(${domain.start}-${domain.end}) ${domain.name}`, {
-            sel: selection, font: 'Arial', fontSize: 14, fontColor: 'black',
-            fontOpacity: 1.0, borderThickness: 0.5, borderColor: 'grey',
-            showBackground: true, backgroundColor: highlightColor, backgroundOpacity: 0.6
+      // Base representation for the whole structure
+      currentStructureComponent.addRepresentation(style, {
+          color: "lightgray",
+          disableImpostor: true,
+          disablePicking: true
         });
 
-        viewer.zoomTo(selection, 800);
-        viewer.render();
+      // Add representation for each domain (if domainData exists)
+      domainData.forEach((domain, i) => {
+        const color = colors[i % colors.length];
+        const selection = `${domain.start}-${domain.end}`; // NGL selection syntax
 
-        currentSelection = { ...domain, color: highlightColor };
+        // Check if start/end are valid numbers before adding representation
+        if (typeof domain.start === 'number' && typeof domain.end === 'number' && domain.start <= domain.end) {
+            currentStructureComponent.addRepresentation(style, {
+              sele: selection,
+              color: color,
+              disableImpostor: true,
+              disablePicking: true
+            });
+
+
+        } else {
+             console.warn(`Skipping invalid domain for NGL representation: ${domain.name} (${domain.start}-${domain.end})`);
+        }
+      });
+
+       // Apply auto view
+       currentStructureComponent.autoView();
+
     }
 
-    // --- Save & Next Button Logic ---
-    saveNextButton.addEventListener('click', async function() {
-        if (!csrfToken) {
-            alert("CSRF token missing. Cannot submit.");
+    function createDomainBar() {
+    domainBarDiv.innerHTML = ""; // Clear previous bar
+
+    if (!domainData || domainData.length === 0) return;
+
+    if (proteinLength <= 0) {
+        console.error("Cannot create domain bar without a valid protein length.");
+        const container = document.getElementById('domain-bar-container');
+        if(container) container.innerHTML = "<p style='text-align:center; color: red;'>Error: Could not determine protein length for domain bar.</p>";
+        return;
+    }
+
+    // Create a container for tick labels
+    const tickContainer = document.createElement("div");
+    tickContainer.style.position = "relative";
+    tickContainer.style.height = "18px";  // space above the domain bar
+    tickContainer.style.marginBottom = "5px";
+
+    domainData.forEach((domain, index) => {
+        if (typeof domain.start !== 'number' || typeof domain.end !== 'number' || domain.start <= 0 || domain.end < domain.start) {
+            console.warn(`Skipping invalid domain for bar: ${domain.name} (${domain.start}-${domain.end})`);
             return;
         }
-        saveNextButton.disabled = true;
-        saveNextButton.textContent = "Saving...";
 
-        const correctionsPayload = [];
-        markedWrong.forEach(frontendId => {
-            const domainInfo = domainData.find(d => d.id === frontendId);
-            if (domainInfo) {
-                correctionsPayload.push({
-                    name: domainInfo.name,
-                    start: domainInfo.start,
-                    end: domainInfo.end
+        const color = colors[index % colors.length];
+        const segment = document.createElement("div");
+        segment.classList.add("domain-segment");
+        segment.dataset.domainIndex = index;
+
+        const startPos = Math.max(1, domain.start);
+        const leftPercent = ((startPos - 1) / proteinLength) * 100;
+        const widthPercent = ((domain.end - startPos + 1) / proteinLength) * 100;
+
+        segment.style.left = `${Math.max(0, Math.min(100, leftPercent))}%`;
+        segment.style.width = `${Math.max(0, Math.min(100 - leftPercent, widthPercent))}%`;
+        segment.style.backgroundColor = color;
+        segment.title = `${domain.name} (${domain.start}-${domain.end}) - Click to mark incorrect`;
+
+        // Label inside the bar
+        const label = document.createElement("span");
+        label.textContent = domain.name;
+        label.style.color = "white";
+        label.style.fontWeight = "bold";
+        label.style.fontSize = "0.75rem";
+        label.style.position = "absolute";
+        label.style.left = "50%";
+        label.style.top = "50%";
+        label.style.transform = "translate(-50%, -50%)";
+        label.style.whiteSpace = "nowrap";
+        label.style.pointerEvents = "none";
+
+        segment.appendChild(label);
+        segment.addEventListener("click", handleDomainClick);
+        domainBarDiv.appendChild(segment);
+
+        // Create top label (start residue)
+        const tick = document.createElement("div");
+        tick.style.position = "absolute";
+        tick.style.left = `${Math.max(0, Math.min(100, leftPercent))}%`;
+        tick.style.transform = "translateX(-50%)";
+        tick.style.fontSize = "0.7rem";
+        tick.style.color = "#555";
+        tick.textContent = domain.start;
+        tickContainer.appendChild(tick);
+    });
+
+    domainBarDiv.parentElement.insertBefore(tickContainer, domainBarDiv);
+}
+
+
+    function handleDomainClick(event) {
+        const segment = event.currentTarget;
+        const index = parseInt(segment.dataset.domainIndex, 10);
+
+        if (isNaN(index) || index < 0 || index >= domainIsWrong.length) return;
+
+        // Toggle the wrong status
+        domainIsWrong[index] = !domainIsWrong[index];
+
+        // Update visual appearance
+        segment.classList.toggle("wrong", domainIsWrong[index]);
+        segment.title = `${domainData[index].name} (${domainData[index].start}-${domainData[index].end}) - Marked as ${domainIsWrong[index] ? 'INCORRECT' : 'correct'}`;
+
+
+        console.log(`Domain ${domainData[index].name} marked as wrong: ${domainIsWrong[index]}`);
+    }
+
+    async function handleSave() {
+        if (!proteinPk || !folderId) {
+            showStatus("Error: Cannot save. Protein or Folder ID missing.", "error");
+            return;
+        }
+
+        console.log("Saving domain corrections...");
+        showStatus("Saving...", "info"); // Provide feedback
+        saveBtn.disabled = true;
+        nextBtn.classList.add('disabled'); // Disable skip button during save
+
+        // 1. Identify domains marked as wrong
+        const correctionsToSend = [];
+        domainData.forEach((domain, index) => {
+            if (domainIsWrong[index]) {
+                correctionsToSend.push({
+                    name: domain.name,
+                    start: domain.start,
+                    end: domain.end
                 });
             }
         });
 
+        // 2. Prepare data payload for the backend
+        const payload = {
+            protein_pk: proteinPk,
+            folder_id: folderId,
+            corrections: correctionsToSend // List of domains marked wrong
+        };
+
         try {
-            const correctionResponse = await fetch("{% url 'annotations_app:submit_domain_correction' %}", {
-                method: "POST",
+            const csrfToken = getCookie('csrftoken');
+            if (!csrfToken) {
+                 throw new Error("CSRF token not found. Cannot submit form.");
+            }
+
+            const response = await fetch(saveUrl, {
+                method: 'POST',
                 headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": csrfToken
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken // Include CSRF token
                 },
-                body: JSON.stringify({
-                    protein_pk: proteinPk,
-                    folder_id: folderId,
-                    corrections: correctionsPayload
-                })
+                body: JSON.stringify(payload)
             });
 
-            if (!correctionResponse.ok) {
-                 let errorMsg = correctionResponse.statusText;
-                 try {
-                     const errorData = await correctionResponse.json();
-                     errorMsg = errorData.error || errorData.message || JSON.stringify(errorData);
-                 } catch (e) { /* Ignore */ }
-                 throw new Error(`Save failed: ${errorMsg} (Status: ${correctionResponse.status})`);
+            // Check response status first
+            if (!response.ok) {
+                let errorMsg = `Error: ${response.status} ${response.statusText}`;
+                try {
+                    // Try to parse error details from backend JSON response
+                    const errorData = await response.json();
+                    errorMsg = `Error: ${errorData.error || JSON.stringify(errorData)}`;
+                    if (errorData.details) {
+                         errorMsg += ` Details: ${errorData.details.join(', ')}`;
+                    }
+                } catch (e) { /* Ignore if response is not JSON */ }
+                throw new Error(errorMsg); // Throw detailed error
             }
 
-            const correctionResult = await correctionResponse.json();
-            if (!correctionResult.success) {
-                 const errorDetails = correctionResult.errors ? ` Details: ${JSON.stringify(correctionResult.errors)}` : '';
-                 throw new Error(`Save failed: ${correctionResult.message || 'Server reported failure.'}${errorDetails}`);
-            }
+            // Try to parse the success response
+            const result = await response.json();
 
-            console.log("Annotations saved:", correctionResult.message);
-
-            if (isSpecificRedo) {
-                window.location.href = "{% url 'annotations_app:annotation_overview' folder_id=folder.id %}";
+            if (result.success) {
+                console.log("Save successful:", result.message);
+                showStatus("Save successful! Redirecting...", "success");
+                // Redirect to the next protein finder URL on success
+                window.location.href = nextProteinFinderUrl;
             } else {
-                window.location.reload();
+                // Handle cases where response is ok (200) but backend indicates failure
+                throw new Error(result.error || "Save request failed. Please check details.");
             }
 
         } catch (error) {
-            console.error("Save & Next error:", error);
-            alert(`Failed to save annotations: ${error.message}`);
-            saveNextButton.disabled = false; // Re-enable button on error
-            saveNextButton.textContent = "Save Corrections & Next";
+            console.error("Save failed:", error);
+            showStatus(`Save failed: ${error.message}`, "error");
+            // Re-enable buttons on failure
+            saveBtn.disabled = false;
+            nextBtn.classList.remove('disabled');
         }
-    });
+        // 'finally' block is less useful here because of the redirect on success
+    }
 
-}); // End DOMContentLoaded
-</script>
+    // --- Event Listeners Setup ---
+    function setupEventListeners() {
+        if (toggleSpinBtn) {
+            toggleSpinBtn.addEventListener("click", () => {
+              if (!stage || !currentStructureComponent) return;
+              isSpinning = !isSpinning;
+              stage.setSpin(isSpinning ? spinAxis : null, isSpinning ? spinSpeed : 0);
+              toggleSpinBtn.textContent = isSpinning ? "Pause Rotation" : "Resume Rotation";
+            });
+        }
 
-</body>
-</html>
+        if (styleSelect) {
+            styleSelect.addEventListener("change", () => {
+              if (currentStructureComponent) {
+                 applyRepresentations(); // Re-apply NGL representations with the new style
+              }
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener("click", handleSave);
+        }
+
+        // Optional: Add listener for "Skip" button if extra logic needed
+        // if (nextBtn) {
+        //    nextBtn.addEventListener('click', (e) => {
+        //        // Could add a confirmation dialog here if needed
+        //        console.log("Skipping to next protein finder...");
+        //    });
+        // }
+    }
+
+    // --- Utility Functions ---
+    function disableControls() {
+        if(toggleSpinBtn) toggleSpinBtn.disabled = true;
+        if(styleSelect) styleSelect.disabled = true;
+        if(saveBtn) saveBtn.disabled = true;
+        if(nextBtn) nextBtn.classList.add('disabled'); // Add disabled style
+        if(domainBarDiv) {
+             domainBarDiv.style.pointerEvents = 'none'; // Disable clicks
+             domainBarDiv.style.opacity = '0.6';
+        }
+    }
+
+    function showStatus(message, type = "info") { // type: info, success, warning, error
+        if (!statusMessageDiv) return;
+        statusMessageDiv.textContent = message;
+        statusMessageDiv.className = `status-${type}`; // Add class for potential styling
+        statusMessageDiv.style.color = type === "error" ? "red" : (type === "success" ? "green" : (type === "warning" ? "orange" : "black"));
+    }
+
+    // Function to get CSRF token from cookies (standard Django practice)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+  </script>
+{% endblock %}
