@@ -867,62 +867,39 @@ def architecture_annotation_overview(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
     user = request.user
 
-    corrections = DomainCorrection.objects.filter(
-        user=user,
-        protein__folder=folder,
-        is_marked_wrong=True
-    ).select_related('protein').order_by('protein__protein_id')
-
-    protein_to_domains = defaultdict(list)
-    for correction in corrections:
-        protein_to_domains[correction.protein].append(correction)
-
-    # Optional: convert to sorted list of tuples
-    sorted_proteins = sorted(protein_to_domains.items(), key=lambda item: item[0].protein_id)
-
-    return render(request, 'annotations_app/architecture_overview.html', {
-        'folder': folder,
-        'protein_to_domains': sorted_proteins,
-        'media_url': settings.MEDIA_URL
-    })
-
-@login_required
-def architecture_annotation_overview(request, folder_id):
-    folder = get_object_or_404(ProteinFolder, id=folder_id)
-    user = request.user
-
-    # Get all annotated proteins in the folder
+    # Get all proteins in this folder annotated by the user
     annotated_proteins = Annotation.objects.filter(
         folder=folder,
         user=user
-    ).values_list('protein_id', flat=True)
-
-    proteins = Protein.objects.filter(folder=folder, pk__in=annotated_proteins).select_related()
-
-    corrections = DomainCorrection.objects.filter(
-        user=user,
-        protein__in=proteins,
-        is_marked_wrong=True
     ).select_related('protein')
 
-    # Create a list of (protein, [corrections])
+    # Get domain corrections
+    corrections = DomainCorrection.objects.filter(
+        user=user,
+        protein__folder=folder
+    ).select_related('protein')
+
+    # Group corrections by protein
     from collections import defaultdict
     protein_to_corrections = defaultdict(list)
     for c in corrections:
         protein_to_corrections[c.protein].append(c)
 
-    # Create list of tuples for template (only those with corrections)
+    # Create list of (protein, [corrections]), even if empty
     protein_correction_list = [
-        (protein, protein_to_corrections.get(protein, []))
-        for protein in sorted(proteins, key=lambda p: p.protein_id)
-        if protein_to_corrections.get(protein)
+        (ann.protein, protein_to_corrections.get(ann.protein, []))
+        for ann in annotated_proteins
     ]
+
+    # Sort by protein ID
+    protein_correction_list.sort(key=lambda pair: pair[0].protein_id)
 
     return render(request, 'annotations_app/architecture_overview.html', {
         'folder': folder,
         'protein_to_domains': protein_correction_list,
         'media_url': settings.MEDIA_URL
     })
+
 
 @login_required
 def download_domain_corrections_csv(request, folder_id):
