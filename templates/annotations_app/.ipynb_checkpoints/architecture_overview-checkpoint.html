@@ -3,48 +3,143 @@
 {% block title %}{{ folder.name }} – Architecture Overview{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #dee2e6;">
+<style>
+  .overview-container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+    font-family: 'Segoe UI', sans-serif;
+  }
 
-  <h2 style="margin-bottom: 25px; font-size: 1.8em; font-weight: 600; color: #212529;">
-    {{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Domain Corrections Overview</small>
-  </h2>
+  .overview-container h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 25px;
+    text-align: center;
+  }
+
+  .overview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+  }
+
+  .overview-table thead tr {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+  }
+
+  .overview-table th,
+  .overview-table td {
+    padding: 14px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .overview-table tr {
+    transition: background-color 0.2s ease;
+  }
+
+  .overview-table tr:hover {
+    background-color: #f1f3f5;
+  }
+
+  .status-clean {
+    background-color: #e6f4ea;
+    color: #207544;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-block;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .status-issues {
+    background-color: #fdecea;
+    color: #a02020;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-block;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .domain-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .domain-list li {
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+  }
+
+  .view-link {
+    background-color: #f0f0f0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    color: #333;
+    transition: all 0.2s ease;
+  }
+
+  .view-link:hover {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+  }
+</style>
+
+<div class="overview-container">
+  <h2>{{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Architecture Review Summary</small></h2>
 
   {% if protein_to_domains %}
-    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em;">
+    <table class="overview-table">
       <thead>
-        <tr style="background-color: #f1f3f5; border-bottom: 2px solid #dee2e6;">
-          <th style="padding: 12px 10px; text-align: left;">Protein ID</th>
-          <th style="padding: 12px 10px; text-align: left;">Marked Domains</th>
-          <th style="padding: 12px 10px; text-align: left;">Actions</th>
+        <tr>
+          <th>Protein ID</th>
+          <th>Status</th>
+          <th>Marked Domains</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-{% for protein, corrections in protein_to_domains %}
-  <tr>
-    <td>{{ protein.protein_id }}</td>
-    <td>
-      <ul>
-        {% for c in corrections %}
-          <li>{{ c.domain_name }} ({{ c.start_pos }}–{{ c.end_pos }})</li>
+        {% for protein, corrections in protein_to_domains %}
+        <tr>
+          <td>{{ protein.protein_id }}</td>
+          <td>
+            {% if corrections %}
+              <span class="status-issues">❌ {{ corrections|length }} domain{{ corrections|length|pluralize }} marked</span>
+            {% else %}
+              <span class="status-clean">✅ No domains marked</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if corrections %}
+              <ul class="domain-list">
+                {% for c in corrections %}
+                  <li>{{ c.domain_name }} ({{ c.start_pos }}–{{ c.end_pos }})</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <em style="color: #6c757d;">None</em>
+            {% endif %}
+          </td>
+          <td>
+            <a class="view-link" href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}">🔍 View</a>
+          </td>
+        </tr>
         {% endfor %}
-      </ul>
-    </td>
-    <td>
-      <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}">
-        View
-      </a>
-    </td>
-  </tr>
-{% endfor %}
-
-
       </tbody>
     </table>
   {% else %}
-    <div style="margin-top: 20px; font-size: 1em; color: #6c757d;">
-      <p>No domain corrections have been marked for this folder yet.</p>
-    </div>
+    <p style="text-align:center; font-size: 1.1rem; color: #6c757d;">No proteins have been annotated yet.</p>
   {% endif %}
-
 </div>
 {% endblock %}

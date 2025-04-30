@@ -4,6 +4,36 @@
 {% block content %}
   <script src="https://cdn.jsdelivr.net/npm/ngl@2.0.0-dev.39/dist/ngl.js"></script>
   <style>
+      .architecture-view button,
+.architecture-view .button {
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #495057;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.architecture-view button:hover,
+.architecture-view .button:hover {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.architecture-view .button.secondary {
+  background-color: #f0f0f0;
+  border-color: #ccc;
+  color: #333;
+}
+
+.architecture-view .button.secondary:hover {
+  background-color: #e6e6e6;
+}
+
     .architecture-view .container {
       max-width: 1000px;
       margin: 0 auto;
