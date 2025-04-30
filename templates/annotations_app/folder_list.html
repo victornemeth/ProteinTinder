@@ -268,10 +268,10 @@
                         
                         {% if entry.is_architecture %}
                           <a class="action-link" href="{% url 'annotations_app:download_domain_corrections_csv' folder_id=entry.folder.id %}">
-                            Download Domain CSV
+                            Download Domain TSV
                           </a>
                         {% else %}
-                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
+                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download TSV</a>
                         {% endif %}
 
 

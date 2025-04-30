@@ -13,14 +13,39 @@
     border: 1px solid #e0e0e0;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
     font-family: 'Segoe UI', sans-serif;
+    position: relative;
   }
 
-  .overview-container h2 {
+  .overview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .overview-header h2 {
     font-size: 1.8rem;
     font-weight: 600;
     color: #212529;
-    margin-bottom: 25px;
-    text-align: center;
+    margin: 0;
+  }
+
+  .download-btn {
+    background-color: #e0e7ff;
+    border: none;
+    color: #1d4ed8;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: background-color 0.2s ease;
+  }
+
+  .download-btn:hover {
+    background-color: #c7d2fe;
   }
 
   .overview-table {
@@ -88,16 +113,59 @@
     font-weight: 500;
     color: #333;
     transition: all 0.2s ease;
+    display: inline-block;
   }
 
   .view-link:hover {
     background-color: #dbeafe;
     color: #1d4ed8;
   }
+
+  @media (max-width: 768px) {
+    .overview-container {
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    .overview-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .overview-table thead {
+      display: none;
+    }
+
+    .overview-table tr {
+      display: block;
+      margin-bottom: 25px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+
+    .overview-table td {
+      display: block;
+      padding: 8px 0;
+      text-align: left;
+    }
+
+    .overview-table td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #6c757d;
+      display: block;
+      margin-bottom: 2px;
+    }
+  }
 </style>
 
 <div class="overview-container">
-  <h2>{{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Architecture Review Summary</small></h2>
+  <div class="overview-header">
+    <h2>{{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Architecture Review Summary</small></h2>
+
+  </div>
 
   {% if protein_to_domains %}
     <table class="overview-table">
@@ -112,15 +180,15 @@
       <tbody>
         {% for protein, corrections in protein_to_domains %}
         <tr>
-          <td>{{ protein.protein_id }}</td>
-          <td>
+          <td data-label="Protein ID">{{ protein.protein_id }}</td>
+          <td data-label="Status">
             {% if corrections %}
               <span class="status-issues">❌ {{ corrections|length }} domain{{ corrections|length|pluralize }} marked</span>
             {% else %}
               <span class="status-clean">✅ No domains marked</span>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Marked Domains">
             {% if corrections %}
               <ul class="domain-list">
                 {% for c in corrections %}
@@ -131,7 +199,7 @@
               <em style="color: #6c757d;">None</em>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Actions">
             <a class="view-link" href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}">🔍 View</a>
           </td>
         </tr>
