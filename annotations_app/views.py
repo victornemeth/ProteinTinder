@@ -542,6 +542,9 @@ def undo_annotation(request):
         folder_id = protein.folder_id
 
         last_annotation.delete()
+        # Delete associated domain corrections too
+        DomainCorrection.objects.filter(user=user, protein=protein).delete()
+
 
         messages.info(request, f"Removed last annotation for protein {protein.protein_id}.")
 
@@ -848,3 +851,28 @@ def undo_standard_annotation(request):
         logger.error(f"Error during standard undo: {e}", exc_info=True)
         messages.error(request, "An error occurred while trying to undo.")
         return redirect('annotations_app:view_folders') # Fallback redirect
+
+
+@login_required
+def architecture_annotation_overview(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    user = request.user
+
+    corrections = DomainCorrection.objects.filter(
+        user=user,
+        protein__folder=folder,
+        is_marked_wrong=True
+    ).select_related('protein').order_by('protein__protein_id')
+
+    protein_to_domains = defaultdict(list)
+    for correction in corrections:
+        protein_to_domains[correction.protein].append(correction)
+
+    # Optional: convert to sorted list of tuples
+    sorted_proteins = sorted(protein_to_domains.items(), key=lambda item: item[0].protein_id)
+
+    return render(request, 'annotations_app/architecture_overview.html', {
+        'folder': folder,
+        'protein_to_domains': sorted_proteins,
+        'media_url': settings.MEDIA_URL
+    })

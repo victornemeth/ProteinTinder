@@ -1,99 +1,183 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload ZIP Folder - Annotate App</title>
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Upload ZIP Folder - Annotate App{% endblock %}
+
+{% block head %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* Basic styles - keep or replace with your own */
-        body { font-family: sans-serif; padding: 20px; margin: 0; background-color: #f4f6f8; display: flex; align-items: center; justify-content: center; min-height: 100vh;}
-        .upload-card { background: white; padding: 40px 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 500px; width: 90%; }
-        h1 { text-align: center; color: #007acc; margin-top: 0; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; color: #333;}
-        input[type="text"], input[type="file"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
-        textarea { min-height: 80px; resize: vertical; }
-        button { background-color: #007acc; color: white; padding: 12px 15px; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; width: 100%; transition: background-color 0.3s ease; }
-        button:hover { background-color: #005f99; }
-        .help-text { font-size: 0.9em; color: #666; margin-top: 5px; }
-        .errorlist { color: #dc3545; list-style-type: none; padding: 0; margin: 5px 0 0 0; font-size: 0.9em; }
-        .checkbox-label { display: inline-block; margin-left: 8px; font-weight: normal; vertical-align: middle;}
-        input[type="checkbox"] { vertical-align: middle; }
-        .error-summary { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 6px; margin-bottom: 20px;}
-        .error-summary h2 { color: #721c24; margin-top: 0; font-size: 1.1em; }
-        .error-summary ul { padding-left: 20px; margin-bottom: 0;}
+
+.upload-card {
+    background: white;
+    padding: 40px 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    max-width: 500px;
+    width: 90%;
+    margin: 0 auto; /* horizontally center */
+}
+
+        h1 {
+            text-align: center;
+            color: #007acc;
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"], input[type="file"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: #007acc;
+            color: white;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #005f99;
+        }
+
+        .help-text {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .errorlist {
+            color: #dc3545;
+            list-style-type: none;
+            padding: 0;
+            margin: 5px 0 0 0;
+            font-size: 0.9em;
+        }
+
+        .checkbox-label {
+            display: inline-block;
+            margin-left: 8px;
+            font-weight: normal;
+            vertical-align: middle;
+        }
+
+        input[type="checkbox"] {
+            vertical-align: middle;
+        }
+
+        .error-summary {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .error-summary h2 {
+            color: #721c24;
+            margin-top: 0;
+            font-size: 1.1em;
+        }
+
+        .error-summary ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
     </style>
-</head>
-<body>
-    <div class="upload-card">
-        <h1>📁 Upload PDB ZIP Folder</h1>
+{% endblock %}
 
-        {% if form.errors %}
-            <div class="error-summary">
-                <h2>Please correct the errors below:</h2>
-                {{ form.non_field_errors }}
-                <ul>
-                    {% for field in form %}
-                        {% if field.errors %}
-                            <li>{{ field.label }}: {{ field.errors|striptags }}</li>
-                        {% endif %}
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
+{% block content %}
+<div class="upload-card">
+    <h1>📁 Upload PDB ZIP Folder</h1>
 
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
+    {% if form.errors %}
+        <div class="error-summary">
+            <h2>Please correct the errors below:</h2>
+            {{ form.non_field_errors }}
+            <ul>
+                {% for field in form %}
+                    {% if field.errors %}
+                        <li>{{ field.label }}: {{ field.errors|striptags }}</li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
 
-            <!-- Render form fields individually -->
-            <div class="form-group">
-                <label for="{{ form.folder_name.id_for_label }}">{{ form.folder_name.label }}</label>
-                {{ form.folder_name }}
-                {% if form.folder_name.help_text %}
-                    <small class="help-text">{{ form.folder_name.help_text }}</small>
-                {% endif %}
-                {{ form.folder_name.errors }}
-            </div>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
 
-            <div class="form-group">
-                <label for="{{ form.annotation_title.id_for_label }}">{{ form.annotation_title.label }}</label>
-                {{ form.annotation_title }}
-                {% if form.annotation_title.help_text %}
-                    <small class="help-text">{{ form.annotation_title.help_text }}</small>
-                {% endif %}
-                {{ form.annotation_title.errors }}
-            </div>
+        <div class="form-group">
+            <label for="{{ form.folder_name.id_for_label }}">{{ form.folder_name.label }}</label>
+            {{ form.folder_name }}
+            {% if form.folder_name.help_text %}
+                <small class="help-text">{{ form.folder_name.help_text }}</small>
+            {% endif %}
+            {{ form.folder_name.errors }}
+        </div>
 
-            <div class="form-group">
-                <label for="{{ form.annotation_description.id_for_label }}">{{ form.annotation_description.label }}</label>
-                {{ form.annotation_description }}
-                {% if form.annotation_description.help_text %}
-                    <small class="help-text">{{ form.annotation_description.help_text }}</small>
-                {% endif %}
-                {{ form.annotation_description.errors }}
-            </div>
+        <div class="form-group">
+            <label for="{{ form.annotation_title.id_for_label }}">{{ form.annotation_title.label }}</label>
+            {{ form.annotation_title }}
+            {% if form.annotation_title.help_text %}
+                <small class="help-text">{{ form.annotation_title.help_text }}</small>
+            {% endif %}
+            {{ form.annotation_title.errors }}
+        </div>
 
-            <div class="form-group">
-                <label for="{{ form.zip_file.id_for_label }}">{{ form.zip_file.label }}</label>
-                {{ form.zip_file }}
-                {% if form.zip_file.help_text %}
-                    <small class="help-text">{{ form.zip_file.help_text }}</small>
-                {% endif %}
-                {{ form.zip_file.errors }}
-            </div>
+        <div class="form-group">
+            <label for="{{ form.annotation_description.id_for_label }}">{{ form.annotation_description.label }}</label>
+            {{ form.annotation_description }}
+            {% if form.annotation_description.help_text %}
+                <small class="help-text">{{ form.annotation_description.help_text }}</small>
+            {% endif %}
+            {{ form.annotation_description.errors }}
+        </div>
 
-            <!-- The checkbox -->
-            <div class="form-group">
-                {{ form.is_architecture_annotation }}
-                <label for="{{ form.is_architecture_annotation.id_for_label }}" class="checkbox-label">{{ form.is_architecture_annotation.label }}</label>
-                {% if form.is_architecture_annotation.help_text %}
-                    <small class="help-text" style="display: block;">{{ form.is_architecture_annotation.help_text }}</small>
-                {% endif %}
-                {{ form.is_architecture_annotation.errors }}
-            </div>
+        <div class="form-group">
+            <label for="{{ form.zip_file.id_for_label }}">{{ form.zip_file.label }}</label>
+            {{ form.zip_file }}
+            {% if form.zip_file.help_text %}
+                <small class="help-text">{{ form.zip_file.help_text }}</small>
+            {% endif %}
+            {{ form.zip_file.errors }}
+        </div>
 
-            <button type="submit">📤 Upload Folder</button>
-        </form>
-    </div>
-</body>
-</html>
+        <div class="form-group">
+            {{ form.is_architecture_annotation }}
+            <label for="{{ form.is_architecture_annotation.id_for_label }}" class="checkbox-label">{{ form.is_architecture_annotation.label }}</label>
+            {% if form.is_architecture_annotation.help_text %}
+                <small class="help-text" style="display: block;">{{ form.is_architecture_annotation.help_text }}</small>
+            {% endif %}
+            {{ form.is_architecture_annotation.errors }}
+        </div>
+
+        <button type="submit">📤 Upload Folder</button>
+    </form>
+</div>
+{% endblock %}

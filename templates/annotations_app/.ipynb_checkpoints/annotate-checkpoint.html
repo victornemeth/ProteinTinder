@@ -1,11 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>Annotate: {% if protein %}{{ protein.protein_id }}{% else %}Protein Not Found{% endif %}</title>
-    <style>
+{% extends "base.html" %}
+{% block title %}Annotate: {% if protein %}{{ protein.protein_id }}{% else %}Protein Not Found{% endif %}{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token }}">
+<style>
         /* --- Base Styles --- */
         html, body {
             margin: 0;
@@ -33,7 +29,7 @@
             border-bottom: 1px solid #e9ecef; /* Lighter border */
         }
         .page-header h1 {
-            font-size: 1.6em; /* Slightly smaller title */
+            font-size: 1em; /* Slightly smaller title */
             margin: 0;
             color: #212529;
             font-weight: 600;
@@ -235,47 +231,37 @@
         }
 
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
-</head>
-<body>
-<div class="container">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
+{% endblock %}
 
-    <!-- NEW HEADER SECTION -->
+{% block content %}
+<div class="container">
     <div class="page-header">
         <h1>{{ annotation_title|default:"Protein Annotation" }}</h1>
         <div class="auth-bar">
             {% if user.is_authenticated %}
-                <span>{{ user.username }}</span> |
-                <form id="logoutForm" method="post" action="{% url 'logout' %}" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Logout</button>
-                </form>
+ 
             {% else %}
                 <a href="{% url 'login' %}?next={{ request.path }}">Login</a> |
                 <a href="{% url 'signup' %}">Sign Up</a>
             {% endif %}
         </div>
     </div>
-    <!-- END NEW HEADER SECTION -->
 
     {% if protein %}
         <!-- CONTEXT AND DESCRIPTION -->
         <div class="annotation-context">
-            <span class="protein-identifier">Annotating: <strong>{{ protein.protein_id }}</strong></span> {# Removed protein name part #}
+            <span class="protein-identifier">Annotating: <strong>{{ protein.protein_id }}</strong></span>
             {% if annotation_description %}
                 <p class="annotation-description">{{ annotation_description }}</p>
             {% endif %}
         </div>
-        <!-- END CONTEXT AND DESCRIPTION -->
 
-        <!-- UPDATED INSTRUCTION TEXT -->
         <div class="swipe-instruction">
-            {# Updated instructions text for clarity #}
             👈 Swipe Left = ❌ Wrong   |   👉 Swipe Right = ✅ Correct    |   👇 Swipe Down = ❓ Unsure
         </div>
 
         <div class="card-stack">
-            <!-- Card content remains the same -->
             <div class="card" id="cardTop">
                 <div class="card-feedback feedback-right" id="feedbackRight">✅</div>
                 <div class="card-feedback feedback-left" id="feedbackLeft">❌</div>
@@ -291,11 +277,11 @@
             <div class="card" style="z-index: -1; background-color: #f0f0f0;"></div>
         </div>
 
-        <!-- ACTION BUTTONS WRAPPER -->
         <div class="action-buttons">
             <button class="action-button undo-button" id="undoBtn">↩️ Undo</button>
             <a href="{% url 'annotations_app:annotation_overview' folder_id=folder.id %}" class="action-button overview-link">Back to Overview</a>
         </div>
+
         <!-- END ACTION BUTTONS WRAPPER -->
 
         <!-- SCRIPT SECTION -->
@@ -639,5 +625,4 @@
     </footer>
 
 </div> <!-- End Container -->
-</body>
-</html>
+{% endblock %}

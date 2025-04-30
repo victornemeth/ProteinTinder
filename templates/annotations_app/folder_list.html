@@ -1,18 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Choose Folder</title>
+{% extends "base.html" %}
+{% block title %}Choose Folder{% endblock %}
+{% block content %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* --- Base Styles (PC / Default) --- */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; /* System font stack */
-            background-color: #f8f9fa; /* Lighter gray */
-            color: #343a40; /* Darker text */
-            margin: 0;
-            padding: 0;
-            line-height: 1.6; /* Improve readability */
-        }
+
 
         .container {
             max-width: 800px;
@@ -31,36 +23,7 @@
             font-weight: 600;
         }
 
-        .auth-bar {
-            text-align: right;
-            margin-bottom: 25px;
-            font-size: 0.9em; /* Slightly smaller */
-            color: #6c757d; /* Muted color */
-        }
 
-        .auth-bar a,
-        .auth-bar button {
-            color: #007bff; /* Standard blue link */
-            text-decoration: none;
-            margin-left: 5px;
-            margin-right: 5px;
-        }
-         .auth-bar button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font: inherit;
-            padding: 0;
-            vertical-align: baseline; /* Align with text */
-        }
-        .auth-bar a:hover,
-        .auth-bar button:hover {
-            text-decoration: underline;
-        }
-
-        .auth-bar form {
-            display: inline;
-        }
 
         ul.folder-list {
             list-style: none;
@@ -177,9 +140,6 @@
 
         /* --- Mobile Styles (Applied when screen width is <= 767px) --- */
         @media (max-width: 767px) {
-            body {
-                padding: 0; /* Remove body padding on mobile */
-            }
 
             .container {
                 max-width: 100%; /* Use full width */
@@ -195,18 +155,6 @@
                 margin-bottom: 20px;
             }
 
-            .auth-bar {
-                text-align: center; /* Center auth links */
-                margin-bottom: 20px;
-                font-size: 0.85em;
-            }
-             .auth-bar span, .auth-bar form { /* Ensure elements stack nicely if needed */
-                display: block;
-                margin-bottom: 5px;
-             }
-             .auth-bar span:last-child, .auth-bar form:last-child {
-                 margin-bottom: 0;
-             }
 
 
             ul.folder-list li {
@@ -275,21 +223,8 @@
 
     </style>
 </head>
-<body>
     <div class="container">
-        <div class="auth-bar">
-            {% if user.is_authenticated %}
-                 {# Wrap in spans for better mobile layout control if needed #}
-                 <span>Welcome, {{ user.username }}</span> |
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button type="submit">Logout</button>
-                </form>
-            {% else %}
-                <span><a href="{% url 'login' %}">Login</a></span> |
-                <span><a href="{% url 'signup' %}">Sign Up</a></span>
-            {% endif %}
-        </div>
+
 
         <h2>Choose a Folder to Annotate</h2>
 
@@ -325,8 +260,15 @@
                     </span>
                     {# Grouped actions #}
                     <span class="folder-actions">
-                        <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                                               {% if entry.is_architecture %}
+                          <a class="action-link" href="{% url 'annotations_app:architecture_annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                        {% else %}
+                          <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                        {% endif %}
                         <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download CSV</a>
+
+
+
                     </span>
                 </li>
             {% empty %}
@@ -338,5 +280,4 @@
              <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
          </div>
     </div>
-</body>
-</html>
+{% endblock %}

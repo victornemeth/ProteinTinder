@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ folder.name }} – Architecture Overview{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #dee2e6;">
+
+  <h2 style="margin-bottom: 25px; font-size: 1.8em; font-weight: 600; color: #212529;">
+    {{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Domain Corrections Overview</small>
+  </h2>
+
+  {% if protein_to_domains %}
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em;">
+      <thead>
+        <tr style="background-color: #f1f3f5; border-bottom: 2px solid #dee2e6;">
+          <th style="padding: 12px 10px; text-align: left;">Protein ID</th>
+          <th style="padding: 12px 10px; text-align: left;">Marked Domains</th>
+          <th style="padding: 12px 10px; text-align: left;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for protein, corrections in protein_to_domains %}
+        <tr style="border-bottom: 1px solid #e9ecef;">
+          <td style="padding: 12px 10px; font-weight: 500;">{{ protein.protein_id }}</td>
+          <td style="padding: 12px 10px;">
+            <ul style="margin: 0; padding-left: 18px;">
+              {% for c in corrections %}
+                <li>{{ c.domain_name }} <span style="color: #6c757d;">({{ c.start_pos }}–{{ c.end_pos }})</span></li>
+              {% endfor %}
+            </ul>
+          </td>
+          <td style="padding: 12px 10px;">
+            <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}"
+               style="font-size: 0.85em; color: #007bff; text-decoration: none; border: 1px solid #007bff; padding: 5px 10px; border-radius: 4px; transition: background-color 0.2s;">
+              View
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div style="margin-top: 20px; font-size: 1em; color: #6c757d;">
+      <p>No domain corrections have been marked for this folder yet.</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
