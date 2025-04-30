@@ -101,7 +101,15 @@ html, body {
         margin-left: 8px;
     }
 }
-
+        /* --- Footer --- */
+        footer {
+            margin-top: 40px; /* Adjusted slightly (was 50px) */
+            padding-top: 15px; /* Adjusted slightly (was 20px) */
+            text-align: center;
+            font-size: 0.85em;
+            color: #adb5bd; /* Lighter grey */
+            border-top: 1px solid #e9ecef;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -131,5 +139,10 @@ html, body {
     </main>
 
     {% block scripts %}{% endblock %}
+
+    <!-- Footer stays the same -->
+    <footer>
+        <p><small>Annotation Tool © 2025</small></p>
+    </footer>
 </body>
 </html>

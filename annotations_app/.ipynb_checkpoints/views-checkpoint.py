@@ -422,11 +422,26 @@ def annotate_protein_view(request, folder_id, protein_pk=None):
     # --- Process based on type ---
     if is_architecture:
         domain_data, csv_error = parse_domain_csv(protein_to_annotate)
-        if csv_error:
-            messages.error(request, f"Error processing domain data for {protein_to_annotate.protein_id}: {csv_error}")
+    
+        # 🔽 Add this to include user's marked corrections
+        marked_wrong_domains = DomainCorrection.objects.filter(
+            user=user,
+            protein=protein_to_annotate,
+            is_marked_wrong=True
+        ).values('domain_name', 'start_pos', 'end_pos')
+    
         context['domain_data'] = domain_data
+        context['marked_wrong_data'] = list({
+            "name": d["domain_name"],
+            "start": d["start_pos"],
+            "end": d["end_pos"]
+        } for d in marked_wrong_domains)
+
+
+
         context['csv_error'] = csv_error
         template_name = 'annotations_app/architecture.html'
+
     else:
         # No specific context needed for standard annotation beyond base context
         template_name = 'annotations_app/annotate.html'
@@ -811,46 +826,40 @@ def submit_domain_correction(request):
 # Renamed original undo view
 @require_POST
 @login_required
-# @csrf_exempt # Better to handle CSRF properly
 def undo_standard_annotation(request):
     """ Undoes the last *standard* annotation (correct/wrong/unsure) """
     user = request.user
     try:
-        # Find the last standard annotation by this user
+        # Get the last annotation
         last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
         protein = last_annotation.protein
-        folder_id = protein.folder_id # Get folder ID for redirect
+        folder = protein.folder
+        folder_id = folder.id
+
+        # Delete the annotation
         last_annotation.delete()
+        # Optionally delete domain corrections too
+        DomainCorrection.objects.filter(user=user, protein=protein).delete()
 
-        messages.info(request, f"Removed last annotation for protein {protein.protein_id}.")
+        # Check if any annotations remain in this folder
+        remaining = Annotation.objects.filter(user=user, folder=folder).exists()
 
-        # Redirect back to the specific protein's annotation page
-        return redirect('annotations_app:annotate_specific_protein', folder_id=folder_id, protein_pk=protein.pk)
-
-        # --- OR --- return JSON if handled purely by JS without reload
-        # return JsonResponse({
-        #     "success": True,
-        #     "message": f"Annotation for {protein.protein_id} removed.",
-        #     # Optionally send back data needed to re-render the protein in JS
-        #     # "protein_pk": protein.pk,
-        #     # "folder_id": folder_id,
-        # })
+        if remaining:
+            messages.info(request, f"Removed annotation for protein {protein.protein_id}.")
+            return redirect('annotations_app:annotate_protein', folder_id=folder_id)
+        else:
+            messages.info(request, f"Removed last annotation in folder '{folder.name}'. Returning to folder list.")
+            return redirect('annotations_app:view_folders')
 
     except Annotation.DoesNotExist:
-         messages.error(request, "No previous annotation found to undo.")
-         # Try to find the last folder the user interacted with if possible, or fallback
-         last_folder = ProteinFolder.objects.filter(user=user).order_by('-created_at').first()
-         if last_folder:
-             return redirect('annotations_app:view_folders') # Or maybe overview of last folder?
-         else:
-             return redirect('annotations_app:view_folders')
+        messages.error(request, "No previous annotation found to undo.")
+        return redirect('annotations_app:view_folders')
 
-        # --- OR --- return JSON error
-        # return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
     except Exception as e:
         logger.error(f"Error during standard undo: {e}", exc_info=True)
         messages.error(request, "An error occurred while trying to undo.")
-        return redirect('annotations_app:view_folders') # Fallback redirect
+        return redirect('annotations_app:view_folders')
+
 
 
 @login_required
@@ -876,3 +885,43 @@ def architecture_annotation_overview(request, folder_id):
         'protein_to_domains': sorted_proteins,
         'media_url': settings.MEDIA_URL
     })
+
+@login_required
+def architecture_annotation_overview(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    user = request.user
+
+    # Get all annotated proteins in the folder
+    annotated_proteins = Annotation.objects.filter(
+        folder=folder,
+        user=user
+    ).values_list('protein_id', flat=True)
+
+    proteins = Protein.objects.filter(folder=folder, pk__in=annotated_proteins).select_related()
+
+    corrections = DomainCorrection.objects.filter(
+        user=user,
+        protein__in=proteins,
+        is_marked_wrong=True
+    ).select_related('protein')
+
+    # Create a list of (protein, [corrections])
+    from collections import defaultdict
+    protein_to_corrections = defaultdict(list)
+    for c in corrections:
+        protein_to_corrections[c.protein].append(c)
+
+    # Create list of tuples for template (only those with corrections)
+    protein_correction_list = [
+        (protein, protein_to_corrections.get(protein, []))
+        for protein in sorted(proteins, key=lambda p: p.protein_id)
+        if protein_to_corrections.get(protein)
+    ]
+
+    return render(request, 'annotations_app/architecture_overview.html', {
+        'folder': folder,
+        'protein_to_domains': protein_correction_list,
+        'media_url': settings.MEDIA_URL
+    })
+
+

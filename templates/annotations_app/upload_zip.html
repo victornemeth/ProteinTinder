@@ -4,8 +4,8 @@
 {% block title %}Upload ZIP Folder - Annotate App{% endblock %}
 
 {% block head %}
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
 
 .upload-card {
     background: white;
@@ -17,98 +17,98 @@
     margin: 0 auto; /* horizontally center */
 }
 
-        h1 {
-            text-align: center;
-            color: #007acc;
-            margin-top: 0;
-        }
+h1 {
+    text-align: center;
+    color: #007acc;
+    margin-top: 0;
+}
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+.form-group {
+    margin-bottom: 20px;
+}
 
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
 
-        input[type="text"], input[type="file"], textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 1em;
-        }
+input[type="text"], input[type="file"], textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
 
-        textarea {
-            min-height: 80px;
-            resize: vertical;
-        }
+textarea {
+    min-height: 80px;
+    resize: vertical;
+}
 
-        button {
-            background-color: #007acc;
-            color: white;
-            padding: 12px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1em;
-            width: 100%;
-            transition: background-color 0.3s ease;
-        }
+.foldd {
+    background-color: #007acc;
+    color: white;
+    padding: 12px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    width: 100%;
+    transition: background-color 0.3s ease;
+}
 
-        button:hover {
-            background-color: #005f99;
-        }
+button:hover {
+    background-color: #005f99;
+}
 
-        .help-text {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
+.help-text {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 5px;
+}
 
-        .errorlist {
-            color: #dc3545;
-            list-style-type: none;
-            padding: 0;
-            margin: 5px 0 0 0;
-            font-size: 0.9em;
-        }
+.errorlist {
+    color: #dc3545;
+    list-style-type: none;
+    padding: 0;
+    margin: 5px 0 0 0;
+    font-size: 0.9em;
+}
 
-        .checkbox-label {
-            display: inline-block;
-            margin-left: 8px;
-            font-weight: normal;
-            vertical-align: middle;
-        }
+.checkbox-label {
+    display: inline-block;
+    margin-left: 8px;
+    font-weight: normal;
+    vertical-align: middle;
+}
 
-        input[type="checkbox"] {
-            vertical-align: middle;
-        }
+input[type="checkbox"] {
+    vertical-align: middle;
+}
 
-        .error-summary {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
+.error-summary {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
 
-        .error-summary h2 {
-            color: #721c24;
-            margin-top: 0;
-            font-size: 1.1em;
-        }
+.error-summary h2 {
+    color: #721c24;
+    margin-top: 0;
+    font-size: 1.1em;
+}
 
-        .error-summary ul {
-            padding-left: 20px;
-            margin-bottom: 0;
-        }
-    </style>
+.error-summary ul {
+    padding-left: 20px;
+    margin-bottom: 0;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -177,7 +177,7 @@
             {{ form.is_architecture_annotation.errors }}
         </div>
 
-        <button type="submit">📤 Upload Folder</button>
+        <button class="foldd" type="submit">📤 Upload Folder</button>
     </form>
 </div>
 {% endblock %}
