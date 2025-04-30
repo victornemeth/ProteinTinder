@@ -54,8 +54,6 @@
       flex-wrap: wrap;
     }
 
-
-
     select {
       padding: 8px;
       font-size: 1rem;
@@ -107,7 +105,7 @@
       margin-top: 15px;
       font-weight: bold;
     }
-    </style>
+  </style>
 <div class="architecture-view">
   <div class="container">
     <div class="page-header">
@@ -170,19 +168,22 @@
       <button id="saveBtn">Save & Go Next</button>
       <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" id="nextBtn" class="button secondary">Skip & Go Next</a>
       <button id="undoBtn" class="button secondary">↩️ Undo Last</button>
-
       <a href="{% url 'annotations_app:architecture_annotation_overview' folder_id=folder.id %}" class="button secondary">Overview</a>
     </div>
 
     <div id="status-message"></div>
   </div>
 </div>
-  <!-- Keep JS block below unchanged, contains NGL & domain logic -->
-  <script>
+<script>
+  const domainData = {{ domain_data|default:'[]'|safe }};
+  const markedWrong = {{ marked_wrong_data|safe }};
+
+
+
+
+
     // --- Configuration (from Django Context) ---
     const pdbUrl = "{{ pdb_url|escapejs|default:'' }}";
-    // Ensure domainData is an empty array if null/None from backend
-    const domainData = {{ domain_data|default:'[]'|safe }};
     const proteinPk = {{ protein.pk|default:'null' }}; // Use Protein Primary Key
     const folderId = {{ folder.id|default:'null' }};
     // URL for submitting the corrections (ensure URL name matches urls.py)
@@ -459,7 +460,26 @@
     });
 
     domainBarDiv.parentElement.insertBefore(tickContainer, domainBarDiv);
+        // Inside the DOMContentLoaded block, AFTER createDomainBar() has run
+domainData.forEach((domain, index) => {
+  const isMarked = markedWrong.some(
+    d => d.name === domain.name && d.start === domain.start && d.end === domain.end
+  );
+  if (isMarked) {
+    domainIsWrong[index] = true;
+  }
+});
+
+
+// Apply wrong visual class manually
+document.querySelectorAll('.domain-segment').forEach((segment, index) => {
+  if (domainIsWrong[index]) {
+    segment.classList.add("wrong");
+    segment.title = `${domainData[index].name} (${domainData[index].start}-${domainData[index].end}) - Marked as INCORRECT`;
+  }
+});
 }
+
 
 
     function handleDomainClick(event) {
@@ -628,5 +648,5 @@
         return cookieValue;
     }
 
-  </script>
+</script>
 {% endblock %}

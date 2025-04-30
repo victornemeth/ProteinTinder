@@ -19,24 +19,25 @@
         </tr>
       </thead>
       <tbody>
-        {% for protein, corrections in protein_to_domains %}
-        <tr style="border-bottom: 1px solid #e9ecef;">
-          <td style="padding: 12px 10px; font-weight: 500;">{{ protein.protein_id }}</td>
-          <td style="padding: 12px 10px;">
-            <ul style="margin: 0; padding-left: 18px;">
-              {% for c in corrections %}
-                <li>{{ c.domain_name }} <span style="color: #6c757d;">({{ c.start_pos }}–{{ c.end_pos }})</span></li>
-              {% endfor %}
-            </ul>
-          </td>
-          <td style="padding: 12px 10px;">
-            <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}"
-               style="font-size: 0.85em; color: #007bff; text-decoration: none; border: 1px solid #007bff; padding: 5px 10px; border-radius: 4px; transition: background-color 0.2s;">
-              View
-            </a>
-          </td>
-        </tr>
+{% for protein, corrections in protein_to_domains %}
+  <tr>
+    <td>{{ protein.protein_id }}</td>
+    <td>
+      <ul>
+        {% for c in corrections %}
+          <li>{{ c.domain_name }} ({{ c.start_pos }}–{{ c.end_pos }})</li>
         {% endfor %}
+      </ul>
+    </td>
+    <td>
+      <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}">
+        View
+      </a>
+    </td>
+  </tr>
+{% endfor %}
+
+
       </tbody>
     </table>
   {% else %}
