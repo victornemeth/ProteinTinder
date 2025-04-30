@@ -35,5 +35,6 @@ urlpatterns = [
 
     path('folder/<int:folder_id>/architecture-overview/', views.architecture_annotation_overview, name='architecture_annotation_overview'),
 
+    path('folder/<int:folder_id>/download_domain_corrections/', views.download_domain_corrections_csv, name='download_domain_corrections_csv'),
 
 ]
