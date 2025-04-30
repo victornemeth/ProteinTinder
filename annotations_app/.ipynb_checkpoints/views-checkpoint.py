@@ -924,4 +924,30 @@ def architecture_annotation_overview(request, folder_id):
         'media_url': settings.MEDIA_URL
     })
 
+@login_required
+def download_domain_corrections_csv(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    user = request.user
+
+    corrections = DomainCorrection.objects.filter(
+        protein__folder=folder,
+        user=user,
+        is_marked_wrong=True
+    ).select_related('protein').order_by('protein__protein_id')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="domain_corrections_{folder.name}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Protein ID', 'Domain Name', 'Start', 'End'])
+
+    for correction in corrections:
+        writer.writerow([
+            correction.protein.protein_id,
+            correction.domain_name,
+            correction.start_pos,
+            correction.end_pos
+        ])
+
+    return response
 
