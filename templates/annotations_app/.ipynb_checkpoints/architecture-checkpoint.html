@@ -19,6 +19,10 @@
   font-weight: 500;
   gap: 10px;
 }
+.toggle-label.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
 
 .toggle-label input {
   display: none;
@@ -263,10 +267,10 @@
   </div>
 </div>
 <script>
+// --- Full JavaScript for Annotated Protein Domain Viewer with Toggle ---
 const domainData = {{ domain_data|default:'[]'|safe }};
 const markedWrong = {{ marked_wrong_data|safe }};
 
-// --- Configuration ---
 const pdbUrl = "{{ pdb_url|escapejs|default:'' }}";
 const proteinPk = {{ protein.pk|default:'null' }};
 const folderId = {{ folder.id|default:'null' }};
@@ -292,287 +296,238 @@ const nextBtn = document.getElementById("nextBtn");
 const statusMessageDiv = document.getElementById("status-message");
 const mergeToggle = document.getElementById("mergeSameDomainsToggle");
 
-// --- Utilities ---
 function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let cookie of cookies) {
-            cookie = cookie.trim();
-            if (cookie.startsWith(name + '=')) {
-                cookieValue = decodeURIComponent(cookie.slice(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  return parts.length === 2 ? decodeURIComponent(parts.pop().split(';').shift()) : null;
 }
 
 function mergeSameTypeAdjacentDomains(domains) {
-    if (!domains || domains.length === 0) return [];
-    const merged = [];
-    let current = { ...domains[0] };
-
-    for (let i = 1; i < domains.length; i++) {
-        const next = domains[i];
-        if (next.name === current.name && next.start === current.end + 1) {
-            current.end = next.end;
-        } else {
-            merged.push(current);
-            current = { ...next };
-        }
+  if (!domains.length) return [];
+  const merged = [];
+  let current = { ...domains[0] };
+  for (let i = 1; i < domains.length; i++) {
+    const next = domains[i];
+    if (next.name === current.name && next.start === current.end + 1) {
+      current.end = next.end;
+    } else {
+      merged.push(current);
+      current = { ...next };
     }
-    merged.push(current);
-    return merged;
+  }
+  merged.push(current);
+  return merged;
 }
 
 function determineProteinLength(structureComponent) {
+  try {
     if (structureComponent?.structure?.residueStore?.resno?.length > 0) {
-        try {
-            proteinLength = Math.max(...structureComponent.structure.residueStore.resno);
-            return;
-        } catch {}
+      proteinLength = Math.max(...structureComponent.structure.residueStore.resno);
+      return;
     }
-    if (domainData?.length > 0) {
-        try {
-            proteinLength = Math.max(...domainData.map(d => d.end));
-            return;
-        } catch {}
-    }
+  } catch {}
+  try {
+    proteinLength = Math.max(...domainData.map(d => d.end));
+  } catch {
     proteinLength = 1;
+  }
 }
 
-// --- Rendering ---
 function applyRepresentations() {
-    if (!currentStructureComponent) return;
-    const mergeEnabled = mergeToggle?.checked;
-    const displayDomains = mergeEnabled ? mergeSameTypeAdjacentDomains(domainData) : domainData;
+  if (!currentStructureComponent) return;
+  const displayDomains = getDisplayDomains();
+  const domainColorMap = assignDomainColors(displayDomains);
 
-    const domainColorMap = {};
-    let colorIndex = 0;
-
-    displayDomains.forEach((domain) => {
-        if (!domainColorMap[domain.name]) {
-            domainColorMap[domain.name] = colors[colorIndex % colors.length];
-            colorIndex++;
-        }
-    });
-
-    const style = styleSelect.value;
-    currentStructureComponent.removeAllRepresentations();
-
+  const style = styleSelect.value;
+  currentStructureComponent.removeAllRepresentations();
+  currentStructureComponent.addRepresentation(style, {
+    color: "lightgray",
+    disableImpostor: true,
+    disablePicking: true
+  });
+  displayDomains.forEach(domain => {
     currentStructureComponent.addRepresentation(style, {
-        color: "lightgray",
-        disableImpostor: true,
-        disablePicking: true
+      sele: `${domain.start}-${domain.end}`,
+      color: domainColorMap[domain.name],
+      disableImpostor: true,
+      disablePicking: true
     });
-
-    displayDomains.forEach((domain) => {
-        const color = domainColorMap[domain.name];
-        const selection = `${domain.start}-${domain.end}`;
-        currentStructureComponent.addRepresentation(style, {
-            sele: selection,
-            color: color,
-            disableImpostor: true,
-            disablePicking: true
-        });
-    });
-
-    currentStructureComponent.autoView();
+  });
+  currentStructureComponent.autoView();
 }
 
 function createDomainBar() {
-    const mergeEnabled = mergeToggle?.checked;
-    const displayDomains = mergeEnabled ? mergeSameTypeAdjacentDomains(domainData) : domainData;
+  const displayDomains = getDisplayDomains();
+  domainBarDiv.innerHTML = "";
+  document.getElementById("tick-container")?.remove();
+  if (!displayDomains.length || proteinLength <= 0) return;
 
-    // Clear domain bar and any previous tick container
-    domainBarDiv.innerHTML = "";
-    const existingTick = document.getElementById("tick-container");
-    if (existingTick) existingTick.remove();
+  const domainColorMap = assignDomainColors(displayDomains);
+  const tickContainer = document.createElement("div");
+  tickContainer.id = "tick-container";
+  tickContainer.style = "position:relative;height:18px;margin-bottom:5px;";
 
-    if (!displayDomains || displayDomains.length === 0 || proteinLength <= 0) return;
+  displayDomains.forEach((domain, index) => {
+    const color = domainColorMap[domain.name];
+    const segment = document.createElement("div");
+    segment.className = "domain-segment";
+    segment.dataset.domainIndex = index;
+    segment.style.left = `${((domain.start - 1) / proteinLength) * 100}%`;
+    segment.style.width = `${((domain.end - domain.start + 1) / proteinLength) * 100}%`;
+    segment.style.backgroundColor = color;
+    segment.title = `${domain.name} (${domain.start}-${domain.end}) - Click to mark incorrect`;
 
-    const domainColorMap = {};
-    let colorIndex = 0;
+    const label = document.createElement("span");
+    label.textContent = domain.name;
+    label.style = "color:white;font-weight:bold;font-size:0.75rem;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none";
+    segment.appendChild(label);
 
-    displayDomains.forEach((domain) => {
-        if (!domainColorMap[domain.name]) {
-            domainColorMap[domain.name] = colors[colorIndex % colors.length];
-            colorIndex++;
-        }
+    segment.addEventListener("click", handleDomainClick);
+
+    domainBarDiv.appendChild(segment);
+
+    const tick = document.createElement("div");
+    tick.style = `position:absolute;left:${((domain.start - 1) / proteinLength) * 100}%;transform:translateX(-50%);font-size:0.7rem;color:#555`;
+    tick.textContent = domain.start;
+    tickContainer.appendChild(tick);
+  });
+
+  domainBarDiv.parentElement.insertBefore(tickContainer, domainBarDiv);
+
+  if (!mergeToggle.checked) {
+    domainIsWrong.forEach((wrong, i) => {
+      if (wrong) domainBarDiv.children[i]?.classList.add("wrong");
     });
+  }
+}
 
-    // Create a container for tick labels (above domain bar)
-    const tickContainer = document.createElement("div");
-    tickContainer.id = "tick-container";
-    tickContainer.style.position = "relative";
-    tickContainer.style.height = "18px";
-    tickContainer.style.marginBottom = "5px";
+function updateMergeToggleAvailability() {
+  const anyMarkedWrong = domainIsWrong.some(isWrong => isWrong);
+  const label = mergeToggle.closest('.toggle-label');
 
-    displayDomains.forEach((domain, index) => {
-        if (typeof domain.start !== 'number' || typeof domain.end !== 'number' || domain.start <= 0 || domain.end < domain.start) return;
+  if (anyMarkedWrong) {
+    mergeToggle.checked = false;
+    mergeToggle.disabled = true;
+    label.classList.add('disabled');
+    localStorage.setItem("mergeSameDomains", "false");
+    applyRepresentations();
+    createDomainBar();
+  } else {
+    mergeToggle.disabled = false;
+    label.classList.remove('disabled');
+  }
+}
+    
 
-        const color = domainColorMap[domain.name];
-        const segment = document.createElement("div");
-        segment.classList.add("domain-segment");
-        segment.dataset.domainIndex = index;
+function handleDomainClick(event) {
+  if (mergeToggle?.checked) {
+    mergeToggle.checked = false;
+    localStorage.setItem("mergeSameDomains", "false");
+    applyRepresentations();
+    createDomainBar();
+    return;  // Require second click
+  }
 
-        const startPos = Math.max(1, domain.start);
-        const leftPercent = ((startPos - 1) / proteinLength) * 100;
-        const widthPercent = ((domain.end - startPos + 1) / proteinLength) * 100;
+  const index = parseInt(event.currentTarget.dataset.domainIndex, 10);
+  if (isNaN(index)) return;
 
-        segment.style.left = `${leftPercent}%`;
-        segment.style.width = `${widthPercent}%`;
-        segment.style.backgroundColor = color;
-        segment.title = `${domain.name} (${domain.start}-${domain.end}) - Click to mark incorrect`;
+  domainIsWrong[index] = !domainIsWrong[index];
+  event.currentTarget.classList.toggle("wrong", domainIsWrong[index]);
 
-        const label = document.createElement("span");
-        label.textContent = domain.name;
-        label.style.cssText = `color:white;font-weight:bold;font-size:0.75rem;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none`;
-        segment.appendChild(label);
-
-        segment.addEventListener("click", handleDomainClick);
-        domainBarDiv.appendChild(segment);
-
-        const tick = document.createElement("div");
-        tick.style.cssText = `position:absolute;left:${leftPercent}%;transform:translateX(-50%);font-size:0.7rem;color:#555`;
-        tick.textContent = domain.start;
-        tickContainer.appendChild(tick);
-    });
-
-    // Insert tick labels above domain bar
-    domainBarDiv.parentElement.insertBefore(tickContainer, domainBarDiv);
+  updateMergeToggleAvailability();
 }
 
 
-function handleDomainClick(event) {
-    const index = parseInt(event.currentTarget.dataset.domainIndex, 10);
-    if (isNaN(index)) return;
+function getDisplayDomains() {
+  return mergeToggle?.checked ? mergeSameTypeAdjacentDomains(domainData) : domainData;
+}
 
-    domainIsWrong[index] = !domainIsWrong[index];
-    event.currentTarget.classList.toggle("wrong", domainIsWrong[index]);
+function assignDomainColors(domains) {
+  const map = {};
+  let i = 0;
+  for (const d of domains) {
+    if (!map[d.name]) map[d.name] = colors[i++ % colors.length];
+  }
+  return map;
 }
 
 function showStatus(message, type = "info") {
-    if (!statusMessageDiv) return;
-    statusMessageDiv.textContent = message;
-    statusMessageDiv.style.color = {
-        error: "red", success: "green", warning: "orange", info: "black"
-    }[type] || "black";
+  statusMessageDiv.textContent = message;
+  statusMessageDiv.style.color = {
+    error: "red", success: "green", warning: "orange", info: "black"
+  }[type] || "black";
 }
 
-// --- Save ---
 async function handleSave() {
-    if (!proteinPk || !folderId) return showStatus("Error: Missing protein/folder ID", "error");
-
-    const corrections = domainData.filter((_, i) => domainIsWrong[i]);
-    const payload = {
-        protein_pk: proteinPk,
-        folder_id: folderId,
-        corrections
-    };
-
-    try {
-        showStatus("Saving...", "info");
-        saveBtn.disabled = true;
-        nextBtn.classList.add("disabled");
-
-        const res = await fetch(saveUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await res.json();
-        if (res.ok && result.success) {
-            showStatus("Save successful! Redirecting...", "success");
-            window.location.href = nextProteinFinderUrl;
-        } else {
-            throw new Error(result.error || "Unknown error");
-        }
-    } catch (err) {
-        showStatus(`Save failed: ${err.message}`, "error");
-        saveBtn.disabled = false;
-        nextBtn.classList.remove("disabled");
-    }
-}
-
-// --- Init ---
-document.addEventListener("DOMContentLoaded", async () => {
-    if (!proteinPk || !folderId) return showStatus("Error: Missing identifiers", "error");
-    setupEventListeners(); // this will apply localStorage preference
-    domainIsWrong = new Array(domainData.length).fill(false);
-
-    stage = new NGL.Stage("viewport", { backgroundColor: "white", fog: false });
-    stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2 });
-
-    window.addEventListener("resize", () => stage.handleResize());
-
-    try {
-        if (pdbUrl) {
-            currentStructureComponent = await stage.loadFile(pdbUrl, { defaultRepresentation: false });
-            determineProteinLength(currentStructureComponent);
-        } else {
-            determineProteinLength(null);
-            viewportDiv.innerHTML = "<p style='text-align:center; color:#555;'>3D structure not available.</p>";
-        }
-
-        applyRepresentations();
-        createDomainBar();
-
-        if (isSpinning && currentStructureComponent) {
-            stage.setSpin(spinAxis, spinSpeed);
-        }
-    } catch (err) {
-        console.error(err);
-        viewportDiv.innerHTML = `<p style="color:red;text-align:center;">Error loading structure: ${err.message}</p>`;
-    }
-
-    if (toggleSpinBtn) {
-        toggleSpinBtn.addEventListener("click", () => {
-            isSpinning = !isSpinning;
-            stage.setSpin(isSpinning ? spinAxis : null, isSpinning ? spinSpeed : 0);
-            toggleSpinBtn.textContent = isSpinning ? "Pause Rotation" : "Resume Rotation";
-        });
-    }
-
-    styleSelect.addEventListener("change", () => applyRepresentations());
-    mergeToggle?.addEventListener("change", () => {
-        applyRepresentations();
-        createDomainBar();
+  const corrections = domainData.filter((_, i) => domainIsWrong[i]);
+  const payload = { protein_pk: proteinPk, folder_id: folderId, corrections };
+  try {
+    showStatus("Saving...", "info");
+    saveBtn.disabled = true;
+    nextBtn.classList.add("disabled");
+    const res = await fetch(saveUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify(payload)
     });
-    saveBtn.addEventListener("click", handleSave);
-});
-function setupEventListeners() {
-    if (mergeToggle) {
-        // Load saved preference
-        const saved = localStorage.getItem("mergeSameDomains");
-        if (saved !== null) {
-            mergeToggle.checked = saved === "true";
-        }
-
-        mergeToggle.addEventListener("change", () => {
-            localStorage.setItem("mergeSameDomains", mergeToggle.checked);
-            applyRepresentations();
-            createDomainBar();
-        });
-    }
-
-    if (toggleSpinBtn) {
-        toggleSpinBtn.addEventListener("click", () => {
-            isSpinning = !isSpinning;
-            stage.setSpin(isSpinning ? spinAxis : null, isSpinning ? spinSpeed : 0);
-            toggleSpinBtn.textContent = isSpinning ? "Pause Rotation" : "Resume Rotation";
-        });
-    }
-
-    styleSelect?.addEventListener("change", applyRepresentations);
-    saveBtn?.addEventListener("click", handleSave);
+    const result = await res.json();
+    if (res.ok && result.success) {
+      showStatus("Saved! Redirecting...", "success");
+      window.location.href = nextProteinFinderUrl;
+    } else throw new Error(result.error || "Unknown error");
+  } catch (e) {
+    showStatus(`Save failed: ${e.message}`, "error");
+    saveBtn.disabled = false;
+    nextBtn.classList.remove("disabled");
+  }
 }
 
+// --- Initialize everything ---
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!proteinPk || !folderId) return showStatus("Missing identifiers", "error");
+
+  domainIsWrong = domainData.map(d => markedWrong.some(w => w.name === d.name && w.start === d.start && w.end === d.end));
+  updateMergeToggleAvailability();
+
+  if (mergeToggle) {
+    const saved = localStorage.getItem("mergeSameDomains");
+    if (saved !== null) mergeToggle.checked = saved === "true";
+    mergeToggle.addEventListener("change", () => {
+      localStorage.setItem("mergeSameDomains", mergeToggle.checked);
+      applyRepresentations();
+      createDomainBar();
+    });
+  }
+
+  stage = new NGL.Stage("viewport", { backgroundColor: "white", fog: false });
+  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2 });
+  window.addEventListener("resize", () => stage.handleResize());
+
+  try {
+    if (pdbUrl) {
+      currentStructureComponent = await stage.loadFile(pdbUrl, { defaultRepresentation: false });
+      determineProteinLength(currentStructureComponent);
+    } else {
+      determineProteinLength(null);
+      viewportDiv.innerHTML = "<p style='text-align:center;color:#555;'>No 3D structure.</p>";
+    }
+    applyRepresentations();
+    createDomainBar();
+    if (isSpinning && currentStructureComponent) stage.setSpin(spinAxis, spinSpeed);
+  } catch (e) {
+    console.error(e);
+    viewportDiv.innerHTML = `<p style='color:red;text-align:center;'>${e.message}</p>`;
+  }
+
+  toggleSpinBtn?.addEventListener("click", () => {
+    isSpinning = !isSpinning;
+    stage.setSpin(isSpinning ? spinAxis : null, isSpinning ? spinSpeed : 0);
+    toggleSpinBtn.textContent = isSpinning ? "Pause Rotation" : "Resume Rotation";
+  });
+
+  styleSelect?.addEventListener("change", () => applyRepresentations());
+  saveBtn?.addEventListener("click", handleSave);
+});
 </script>
 
 {% endblock %}
