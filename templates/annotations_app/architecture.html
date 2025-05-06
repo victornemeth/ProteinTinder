@@ -500,7 +500,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   stage = new NGL.Stage("viewport", { backgroundColor: "white", fog: false });
-  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2 });
+  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2, fogNear: 100, fogFar: 100, fog: false });
+
   window.addEventListener("resize", () => stage.handleResize());
 
   try {
