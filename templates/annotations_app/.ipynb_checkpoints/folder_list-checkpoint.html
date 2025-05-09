@@ -223,9 +223,7 @@
 
     </style>
 </head>
-    <div class="container">
-
-
+<div class="container">
         <h2>Choose a Folder to Annotate</h2>
 
          {% if messages %}
@@ -239,33 +237,29 @@
         <ul class="folder-list">
             {% for entry in folder_data %}
                 <li>
-                    {# Grouped folder name/type/status/count #}
                     <span class="folder-info">
                         <a href="{% url 'annotations_app:annotate_protein' folder_id=entry.folder.id %}">
                             {{ entry.folder.name }}
                         </a>
-                        {# --- NEW: Display Folder Type --- #}
                         <span class="folder-type">
                             {% if entry.is_architecture %}
-                                🏗️ Architecture
+                                🏟️ Architecture
                             {% else %}
                                 🧬 Structure Only
                             {% endif %}
                         </span>
-                        {# --- End New --- #}
                         <span class="status-count">
                              <span class="emoji">{% if entry.is_complete %} ✅ {% else %} ⏳ {% endif %}</span>
                              ({{ entry.annotated_count }}/{{ entry.total_proteins }})
                          </span>
                     </span>
-                    {# Grouped actions #}
                     <span class="folder-actions">
-                                               {% if entry.is_architecture %}
+                        {% if entry.is_architecture %}
                           <a class="action-link" href="{% url 'annotations_app:architecture_annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
                         {% else %}
                           <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
                         {% endif %}
-                        
+
                         {% if entry.is_architecture %}
                           <a class="action-link" href="{% url 'annotations_app:download_domain_corrections_csv' folder_id=entry.folder.id %}">
                             Download TSV
@@ -274,9 +268,12 @@
                         <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download TSV</a>
                         {% endif %}
 
-
-
-
+                        {% if user == entry.folder.user %}
+                        <form method="post" action="{% url 'annotations_app:delete_folder' folder_id=entry.folder.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Delete</button>
+                        </form>
+                        {% endif %}
                     </span>
                 </li>
             {% empty %}

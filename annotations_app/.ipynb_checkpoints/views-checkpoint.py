@@ -955,3 +955,24 @@ def download_domain_corrections_csv(request, folder_id):
     return response
 
 
+@require_POST
+@login_required
+def delete_folder(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+
+    if request.user != folder.user:
+        messages.error(request, "You are not authorized to delete this folder.")
+        return redirect('annotations_app:view_folders')
+
+    try:
+        # Optionally delete associated proteins and annotations
+        Protein.objects.filter(folder=folder).delete()
+        Annotation.objects.filter(folder=folder).delete()
+        DomainCorrection.objects.filter(protein__folder=folder).delete()
+        folder.delete()
+        messages.success(request, f"Folder '{folder.name}' has been deleted.")
+    except Exception as e:
+        logger.error(f"Error deleting folder {folder_id}: {e}", exc_info=True)
+        messages.error(request, "An error occurred while deleting the folder.")
+
+    return redirect('annotations_app:view_folders')
