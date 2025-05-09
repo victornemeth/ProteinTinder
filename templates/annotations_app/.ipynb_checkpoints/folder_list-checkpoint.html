@@ -269,10 +269,13 @@
                         {% endif %}
 
                         {% if user == entry.folder.user %}
-                        <form method="post" action="{% url 'annotations_app:delete_folder' folder_id=entry.folder.id %}" style="display:inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Delete</button>
-                        </form>
+<form method="post" action="{% url 'annotations_app:delete_folder' folder_id=entry.folder.id %}"
+      style="display:inline;"
+      onsubmit="return confirm('Are you sure you want to delete the folder \'{{ entry.folder.name }}\'? This action cannot be undone.');">
+    {% csrf_token %}
+    <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Delete</button>
+</form>
+
                         {% endif %}
                     </span>
                 </li>
