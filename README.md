@@ -21,9 +21,6 @@ And can be exported to csv from within the webapp.
 
 - If you have suggestions please let me know!
 - Deploying the website with Debug=False, nginx config.
-- The ability to see an overview of the annotations of another user
-- The option to remove own uploads
-- The option to color the same domains in the same color (segmented domains)
 
 ## Use
 

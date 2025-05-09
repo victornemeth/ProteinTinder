@@ -29,7 +29,7 @@ import csv
 from django.http import HttpResponse
 from collections import defaultdict
 from django.utils.encoding import smart_str  # To ensure UTF-8 strings
-
+from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
 
@@ -305,41 +305,40 @@ def upload_zip_view(request):
         form = PDBZipUploadForm()
     return render(request, 'annotations_app/upload_zip.html', {'form': form})
 
+from django.contrib.auth import get_user_model
+
 @login_required
 def view_folders(request):
-    # Fetch all folders ordered by name
     folders = ProteinFolder.objects.all().order_by('name')
-
-    # Annotate each folder queryset object with whether it contains any protein
-    # that has a non-null domain_csv_path. This is more efficient than looping
-    # and querying inside the loop for each folder.
     folders = folders.annotate(
         has_architecture_data=Exists(
             Protein.objects.filter(
                 folder=OuterRef('pk'),
                 domain_csv_path__isnull=False
-                # Optionally add: .exclude(domain_csv_path__exact='') if empty strings are possible and unwanted
             )
         )
     )
-
     folder_data = []
     for folder in folders:
-        # Get counts (consider optimizing if many proteins per folder)
-        total_proteins = folder.proteins.count() # Could potentially be optimized further if needed
+        total_proteins = folder.proteins.count()
         annotated_count = Annotation.objects.filter(folder=folder, user=request.user).count()
-
         is_complete = total_proteins > 0 and total_proteins == annotated_count
-
         folder_data.append({
             'folder': folder,
-            'is_architecture': folder.has_architecture_data, # Use the annotated value
+            'is_architecture': folder.has_architecture_data,
             'is_complete': is_complete,
             'total_proteins': total_proteins,
             'annotated_count': annotated_count,
         })
 
-    return render(request, 'annotations_app/folder_list.html', {'folder_data': folder_data})
+    User = get_user_model()
+    users = User.objects.all()
+
+    return render(request, 'annotations_app/folder_list.html', {
+        'folder_data': folder_data,
+        'users': users,
+    })
+
 
 def signup_view(request):
     if request.method == 'POST':
@@ -595,55 +594,46 @@ def undo_annotation(request):
 def annotation_overview(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
 
-    # Get the flat list of annotations, SORTED BY THE GROUPING KEY FIRST
+    user_id = request.GET.get("user")
+    if user_id and user_id != str(request.user.id):
+        try:
+            target_user = get_user_model().objects.get(id=user_id)
+        except get_user_model().DoesNotExist:
+            messages.error(request, "User not found.")
+            return redirect("annotations_app:view_folders")
+    else:
+        target_user = request.user
+
     annotations = Annotation.objects.filter(
         folder=folder,
-        user=request.user
-    ).select_related('protein').order_by('given_annotation', 'protein__protein_id') # CORRECTED ORDERING
+        user=target_user
+    ).select_related("protein").order_by("given_annotation", "protein__protein_id")
 
-    # The template will handle the grouping now
-
-    # Clean paths directly on the protein objects within annotations
     for ann in annotations:
         protein = ann.protein
         if protein.pdb_file_path:
             try:
-                # Manual relative path construction:
                 base_media_path = os.path.join(settings.MEDIA_ROOT, '')
-                # Check if the path is already relative, avoid calling default_storage.path on relative paths
-                if not os.path.isabs(protein.pdb_file_path):
-                     # Assume it might be relative to MEDIA_ROOT already (e.g., 'pdbs/user/folder/file.pdb')
-                     # Or if it includes MEDIA_URL prefix, strip it if needed
-                     # This part might need adjustment based on exactly how paths are stored
-                     # For now, let's assume if it's not absolute, it's okay as is for URL construction
-                     pass # Keep the path as is
-                else:
-                    # If it's absolute, try to make it relative to MEDIA_ROOT
-                    pdb_full_path = default_storage.path(protein.pdb_file_path) # This might fail if path isn't in storage
+                if os.path.isabs(protein.pdb_file_path):
+                    pdb_full_path = default_storage.path(protein.pdb_file_path)
                     relative_path = os.path.relpath(pdb_full_path, base_media_path)
-                    # Ensure forward slashes for URL compatibility
-                    protein.pdb_file_path = relative_path.replace(os.path.sep, '/') # Overwrite original or use new attr
-
-            except ValueError as ve:
-                 # Handle cases where default_storage.path() fails (e.g., path not managed by storage)
-                 logging.warning(f"Could not resolve absolute path for protein {protein.id} ('{protein.pdb_file_path}'): {ve}. Assuming relative path.")
-                 # Ensure forward slashes even if we couldn't resolve it fully
-                 if protein.pdb_file_path:
-                     protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+                    protein.pdb_file_path = relative_path.replace(os.path.sep, '/')
+                else:
+                    protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
             except Exception as e:
-                logging.error(f"Error processing PDB path for protein {protein.id} ('{protein.pdb_file_path}'): {e}")
-                protein.pdb_file_path = None # Indicate path issue
+                logger.warning(f"Path issue for protein {protein.pk}: {e}")
+                protein.pdb_file_path = None
 
-        # Ensure forward slashes just in case
-        if protein.pdb_file_path:
-             protein.pdb_file_path = protein.pdb_file_path.replace(os.path.sep, '/')
+    users = get_user_model().objects.all()
 
-
-    return render(request, 'annotations_app/annotation_overview.html', {
-        'folder': folder,
-        'annotations': annotations, # Pass the correctly sorted flat queryset/list
-        'media_url': settings.MEDIA_URL
+    return render(request, "annotations_app/annotation_overview.html", {
+        "folder": folder,
+        "annotations": annotations,
+        "media_url": settings.MEDIA_URL,
+        "target_user": target_user,
+        "users": users,  # ✅ Added users list here
     })
+
 
 @require_POST # Ensure this view only accepts POST requests
 @login_required
@@ -862,21 +852,31 @@ def undo_standard_annotation(request):
         return redirect('annotations_app:view_folders')
 
 
-
 @login_required
 def architecture_annotation_overview(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
-    user = request.user
 
-    # Get all proteins in this folder annotated by the user
+    user_id = request.GET.get("user")
+    User = get_user_model()
+
+    # Resolve target user: either selected user or fallback to current
+    if user_id:
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            messages.error(request, "User not found.")
+            return redirect("annotations_app:view_folders")
+    else:
+        target_user = request.user  # Default to current user
+
+    # Fetch annotations and corrections for the selected user
     annotated_proteins = Annotation.objects.filter(
         folder=folder,
-        user=user
+        user=target_user
     ).select_related('protein')
 
-    # Get domain corrections
     corrections = DomainCorrection.objects.filter(
-        user=user,
+        user=target_user,
         protein__folder=folder
     ).select_related('protein')
 
@@ -886,20 +886,24 @@ def architecture_annotation_overview(request, folder_id):
     for c in corrections:
         protein_to_corrections[c.protein].append(c)
 
-    # Create list of (protein, [corrections]), even if empty
+    # Merge annotations + corrections for display
     protein_correction_list = [
         (ann.protein, protein_to_corrections.get(ann.protein, []))
         for ann in annotated_proteins
     ]
-
-    # Sort by protein ID
     protein_correction_list.sort(key=lambda pair: pair[0].protein_id)
+
+    # Make sure current user is in the dropdown list too
+    users = User.objects.all()
 
     return render(request, 'annotations_app/architecture_overview.html', {
         'folder': folder,
         'protein_to_domains': protein_correction_list,
-        'media_url': settings.MEDIA_URL
+        'media_url': settings.MEDIA_URL,
+        'target_user': target_user,
+        'users': users,  # Includes current user
     })
+
 
 
 @login_required
