@@ -172,6 +172,18 @@
     <div class="container">
         <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Back to Folder List</a>
         <h2>Annotation Overview for: {{ folder.name }}</h2>
+
+        <div style="margin-bottom: 15px;">
+            <label for="peek-user">👁 Annotated by:</label>
+            <select id="peek-user" onchange="if(this.value) window.location.href=this.value;">
+                {% for u in users %}
+                    <option value="{% url 'annotations_app:annotation_overview' folder.id %}?user={{ u.id }}" {% if target_user.id == u.id %}selected{% endif %}>
+                        {{ u.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
         <p><strong>Title:</strong> {{ folder.title }}</p>
         <p><strong>Description:</strong> {{ folder.description }}</p>
 
