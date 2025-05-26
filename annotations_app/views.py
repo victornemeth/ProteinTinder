@@ -6,6 +6,7 @@ import zipfile
 import tempfile
 import logging
 import io # Required for reading CSV from storage
+from io import BytesIO
 
 from django.db import IntegrityError, transaction # Import transaction
 from django.conf import settings
@@ -32,6 +33,39 @@ from django.utils.encoding import smart_str  # To ensure UTF-8 strings
 from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
+
+
+
+
+@login_required
+def download_pdb_folder_zip(request, folder_id):
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+    proteins = Protein.objects.filter(folder=folder).exclude(pdb_file_path__isnull=True)
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for protein in proteins:
+            try:
+                # Add PDB file
+                pdb_path = default_storage.path(protein.pdb_file_path)
+                with open(pdb_path, 'rb') as pdb_file:
+                    pdb_filename = f"{protein.protein_id}.pdb"
+                    zip_file.writestr(pdb_filename, pdb_file.read())
+
+                # Optionally add CSV if exists
+                if protein.domain_csv_path:
+                    csv_path = default_storage.path(protein.domain_csv_path)
+                    with open(csv_path, 'rb') as csv_file:
+                        csv_filename = f"{protein.protein_id}.csv"
+                        zip_file.writestr(csv_filename, csv_file.read())
+            except Exception as e:
+                logger.warning(f"Failed to add files for {protein.protein_id}: {e}")
+
+    zip_buffer.seek(0)
+    filename = slugify(folder.name) + "_pdbs_and_csvs.zip"
+    response = HttpResponse(zip_buffer, content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 # --- Helper Function for CSV Parsing ---

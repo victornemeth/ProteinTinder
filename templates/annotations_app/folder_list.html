@@ -262,11 +262,14 @@
 
                         {% if entry.is_architecture %}
                           <a class="action-link" href="{% url 'annotations_app:download_domain_corrections_csv' folder_id=entry.folder.id %}">
-                            Download TSV
+                            💾 TSV
                           </a>
                         {% else %}
-                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">Download TSV</a>
+                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">💾 TSV</a>
                         {% endif %}
+                        <a class="action-link" href="{% url 'annotations_app:download_folder_zip' folder_id=entry.folder.id %}">
+    📦 PDBs
+</a>
 
                         {% if user == entry.folder.user %}
 <form method="post" action="{% url 'annotations_app:delete_folder' folder_id=entry.folder.id %}"
