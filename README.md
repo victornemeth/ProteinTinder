@@ -28,6 +28,20 @@ And can be exported to csv from within the webapp.
 - Upload your folder of pdbs as a zip file and add a annotation title (e.g. Correctly Folded?) and description
 - The name of the pdb file is also its protein_id
 
+### Protein Architecture
+
+- Check the box **"Include architecture data (CSV files)?"** during upload.
+- The uploaded `.zip` file must include both `.pdb` and `.csv` files.
+- Each `.csv` file should share the same name as its corresponding `.pdb` file (i.e., `protein_id.csv` and `protein_id.pdb`).
+
+#### Example `.csv` format:
+
+```csv
+Domain Number,Start Residue,End Residue,Predicted Domain
+1,1,181,XD2
+2,182,294,XD3
+```
+
 ## Features
 
 - 🧬 Interactive 3D protein viewer
