@@ -38,5 +38,7 @@ urlpatterns = [
     path('folder/<int:folder_id>/download_domain_corrections/', views.download_domain_corrections_csv, name='download_domain_corrections_csv'),
 
     path('delete-folder/<int:folder_id>/', views.delete_folder, name='delete_folder'),
+    path('download_folder_zip/<int:folder_id>/', views.download_pdb_folder_zip, name='download_folder_zip'),
+
 
 ]
