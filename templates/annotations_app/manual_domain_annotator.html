@@ -80,6 +80,7 @@
   </style>
 
 <div class="architecture-view">
+   {% csrf_token %}
   <div class="container">
     <h1>{{ annotation_title }} - {{ protein.protein_id }}</h1>
 
@@ -126,8 +127,13 @@
       <button id="addDomainBtn" title="Add a default domain at the end">Add Default Domain</button>
       <button id="saveBtn">Save Annotations</button>
       <!-- <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" -->
-      <a href="{{ next_protein_url }}"
-         id="nextBtn" class="button secondary">Skip & Go Next</a>
+      <!-- <a href="{{ next_protein_url }}"
+         id="nextBtn" class="button secondary">Skip & Go Next</a> -->
+              <a id="overviewBtn"
+           class="button secondary"
+           href="{% url 'annotations_app:domain_annotation_overview' folder_id=folder.id %}">
+           🔍 Overview
+        </a>
       <button id="deleteDomainBtn" disabled
               title="Click a domain on the bar to enable delete">Delete Selected</button>
     </div>
@@ -600,13 +606,33 @@ ui.deleteDomainBtn.addEventListener('click',()=>{
   }
 });
 
+/* ----------  MISC HELPERS ---------- */
+function getCSRFCookie() {
+  // returns the *last* csrftoken in document.cookie
+  const cookies = document.cookie.split('; ').filter(c => c.startsWith('csrftoken='));
+  if (!cookies.length) return null;
+  return decodeURIComponent(cookies[cookies.length - 1].split('=')[1]);
+}
+
+const csrftoken = getCSRFCookie();
+
+function updateStatus(msg, type='info'){
+  ui.statusMessage.textContent = msg;
+  ui.statusMessage.className   = type;
+  if (type === 'success'){
+    setTimeout(() => {
+      if (ui.statusMessage.textContent === msg) ui.statusMessage.textContent='';
+    }, 3000);
+  }
+}
+
 /* ------------------------------------------------------------------
    SAVE TO SERVER
 ------------------------------------------------------------------ */
 async function handleSave(){
   updateStatus('Saving…','info');
   ui.saveBtn.disabled=true;
-  document.getElementById('nextBtn').classList.add('disabled-link');
+//  document.getElementById('nextBtn').classList.add('disabled-link');
 
   /* Validation */
   for (let i=0;i<domainData.length;i++){
@@ -614,13 +640,13 @@ async function handleSave(){
     if (!d.name || !d.name.trim()){
       updateStatus(`Domain ${i+1} (${d.start}-${d.end}) needs a name.`,'error');
       ui.saveBtn.disabled=false;
-      document.getElementById('nextBtn').classList.remove('disabled-link');
+      // document.getElementById('nextBtn').classList.remove('disabled-link');
       return;
     }
     if (!d.start || !d.end || d.start<1 || d.end>proteinLength || d.start>d.end){
       updateStatus(`Domain “${d.name}” has an invalid range.`,'error');
       ui.saveBtn.disabled=false;
-      document.getElementById('nextBtn').classList.remove('disabled-link');
+      // document.getElementById('nextBtn').classList.remove('disabled-link');
       return;
     }
   }
@@ -631,7 +657,7 @@ async function handleSave(){
     if (sorted[i-1].end>=sorted[i].start){
       updateStatus(`Domains “${sorted[i-1].name}” & “${sorted[i].name}” overlap.`,'error');
       ui.saveBtn.disabled=false;
-      document.getElementById('nextBtn').classList.remove('disabled-link');
+      // document.getElementById('nextBtn').classList.remove('disabled-link');
       return;
     }
   }
@@ -646,11 +672,12 @@ async function handleSave(){
         end  : d.end
       }))
     };
-    const csrftoken = getCookie('csrftoken');
+    // const csrftoken = getCookie('csrftoken');
     if (!csrftoken) throw new Error('CSRF token missing.');
 
     const r = await fetch(saveUrl,{
       method:'POST',
+      credentials: 'same-origin',   // ⬅️  make sure session & csrftoken cookies go along
       headers:{
         'Content-Type':'application/json',
         'X-CSRFToken':csrftoken
@@ -667,7 +694,7 @@ async function handleSave(){
     console.error(err);
     updateStatus('Save error: ' + err.message,'error');
     ui.saveBtn.disabled=false;
-    document.getElementById('nextBtn').classList.remove('disabled-link');
+    // document.getElementById('nextBtn').classList.remove('disabled-link');
   }
 }
 
