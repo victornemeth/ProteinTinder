@@ -96,9 +96,11 @@
             <!-- <a href="{% url 'annotations_app:manual_annotate_specific'
                            folder.id protein.pk %}"
                class="action-link">Re-annotate</a> -->
-             <a href="{% url 'annotations_app:manual_annotate_specific'
+             <!-- <a href="{% url 'annotations_app:manual_annotate_specific'
                            folder.id protein.pk %}"
-               class="btn btn--secondary">Re-annotate</a>
+               class="btn btn--secondary">Re-annotate</a> -->
+               <a href="{% url 'annotations_app:manual_annotate_specific' folder.id protein.pk %}"
+    class="btn btn--secondary">Re-annotate</a>
           </div>
         </div>
       {% endfor %}

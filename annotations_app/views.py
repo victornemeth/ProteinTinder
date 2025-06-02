@@ -1125,7 +1125,8 @@ def manual_annotate_folder_view(request, folder_id, protein_pk=None):
 
     # ── decide which protein to show ─────────────────────────────────
     if protein_pk:                                    # explicit redo
-        protein = get_object_or_404(proteins_qs, pk=protein_pk)
+        # protein = get_object_or_404(proteins_qs, pk=protein_pk)
+        protein = get_object_or_404(Protein, pk=protein_pk, folder=folder)
     else:                                             # next un-annotated
         done_ids = Annotation.objects.filter(
             user=user, folder=folder
