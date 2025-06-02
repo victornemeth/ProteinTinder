@@ -92,3 +92,18 @@ class DomainCorrection(models.Model):
 
     def __str__(self):
         return f"Domain Correction by {self.user.username} on {self.protein.protein_id}: Domain '{self.domain_name}' ({self.start_pos}-{self.end_pos})"
+
+class ManualDomainAnnotation(models.Model):
+    protein = models.ForeignKey(Protein, on_delete=models.CASCADE, related_name='manual_domain_annotations')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='manual_domain_annotations')
+    domain_name = models.CharField(max_length=100)
+    start_pos = models.IntegerField()
+    end_pos = models.IntegerField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('protein', 'user', 'domain_name', 'start_pos', 'end_pos')
+        ordering = ['start_pos']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.protein.protein_id}: {self.domain_name} ({self.start_pos}-{self.end_pos})"
