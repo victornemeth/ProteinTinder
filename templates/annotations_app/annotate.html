@@ -388,6 +388,7 @@
                               "Content-Type": "application/json",
                               "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content
                             },
+                            body: JSON.stringify({ folder_id: folderId }),   //  ← NEW
                         }).then(response => {
                             if (!response.ok) {
                                 return response.text().then(text => { throw new Error(`HTTP error! Status: ${response.status}, Message: ${text || 'Server error'}`); });
@@ -395,8 +396,14 @@
                             return response.json();
                         })
                         .then(data => {
-                              if (data.success) {
+                            if (data.success) {
+                            // - Redirect if the server gives us a target,
+                            //   otherwise fall back to a simple reload.
+                            if (data.redirect_url) {
+                                window.location.href = data.redirect_url;
+                            } else {
                                 window.location.reload();
+                            }
                               } else {
                                 alert("Undo failed: " + (data.error || "Unknown error"));
                              }

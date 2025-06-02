@@ -258,7 +258,7 @@
 
     <div class="action-buttons">
       <button id="saveBtn">Save & Go Next</button>
-      <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" id="nextBtn" class="button secondary">Skip & Go Next</a>
+      <!-- <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" id="nextBtn" class="button secondary">Skip & Go Next</a> -->
       <button id="undoBtn" class="button secondary">↩️ Undo Last</button>
       <a href="{% url 'annotations_app:architecture_annotation_overview' folder_id=folder.id %}" class="button secondary">Overview</a>
     </div>
@@ -267,88 +267,111 @@
   </div>
 </div>
 <script>
-// --- Full JavaScript for Annotated Protein Domain Viewer with Toggle ---
-const domainData = {{ domain_data|default:'[]'|safe }};
+// === DATA FROM BACK-END ===
+const domainData  = {{ domain_data|default:'[]'|safe }};
 const markedWrong = {{ marked_wrong_data|safe }};
+const pdbUrl      = "{{ pdb_url|escapejs|default:'' }}";
+const proteinPk   = {{ protein.pk|default:'null' }};
+const folderId    = {{ folder.id|default:'null' }};
+const saveUrl     = "{% url 'annotations_app:submit_domain_correction' %}";
+const nextProteinUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
 
-const pdbUrl = "{{ pdb_url|escapejs|default:'' }}";
-const proteinPk = {{ protein.pk|default:'null' }};
-const folderId = {{ folder.id|default:'null' }};
-const saveUrl = "{% url 'annotations_app:submit_domain_correction' %}";
-const nextProteinFinderUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
-
-let stage;
-let currentStructureComponent = null;
+// === GLOBAL STATE ===
+let stage, currentStructureComponent = null;
 let isSpinning = true;
-const spinSpeed = 0.01;
-const spinAxis = [0, 1, 0];
+const spinSpeed   = 0.01;
+const spinAxis    = [0, 1, 0];
 let proteinLength = 0;
 let domainIsWrong = [];
+const colors = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#1abc9c",
+                "#e67e22","#8e44ad","#34495e","#f1c40f","#c0392b","#2980b9"];
 
-const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#8e44ad", "#34495e", "#f1c40f", "#c0392b", "#2980b9"];
-
-const viewportDiv = document.getElementById("viewport");
+// === ELEMENTS ===
+const viewportDiv   = document.getElementById("viewport");
 const toggleSpinBtn = document.getElementById("toggleSpinBtn");
-const styleSelect = document.getElementById("styleSelect");
-const domainBarDiv = document.getElementById("domain-bar");
-const saveBtn = document.getElementById("saveBtn");
-const nextBtn = document.getElementById("nextBtn");
-const statusMessageDiv = document.getElementById("status-message");
-const mergeToggle = document.getElementById("mergeSameDomainsToggle");
+const styleSelect   = document.getElementById("styleSelect");
+const domainBarDiv  = document.getElementById("domain-bar");
+const saveBtn       = document.getElementById("saveBtn");
+ // const nextBtn       = document.getElementById("nextBtn");
+const statusDiv     = document.getElementById("status-message");
+const mergeToggle   = document.getElementById("mergeSameDomainsToggle");
 
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  return parts.length === 2 ? decodeURIComponent(parts.pop().split(';').shift()) : null;
-}
-
-function mergeSameTypeAdjacentDomains(domains) {
-  if (!domains.length) return [];
-  const merged = [];
-  let current = { ...domains[0] };
-  for (let i = 1; i < domains.length; i++) {
-    const next = domains[i];
-    if (next.name === current.name && next.start === current.end + 1) {
-      current.end = next.end;
-    } else {
-      merged.push(current);
-      current = { ...next };
+// ---------- HELPERS ----------
+function getCookie(name) {               // robust version (handles duplicates/whitespace)
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== "") {
+    const cookies = document.cookie.split(";");
+    for (let cookie of cookies) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + "=")) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
     }
   }
-  merged.push(current);
+  return cookieValue;
+}
+const csrftoken = getCookie("csrftoken");
+
+function mergeAdjacent(domains) {
+  if (!domains.length) return [];
+  const merged = [];
+  let cur = { ...domains[0] };
+  for (let i = 1; i < domains.length; i++) {
+    const nxt = domains[i];
+    if (nxt.name === cur.name && nxt.start === cur.end + 1) cur.end = nxt.end;
+    else { merged.push(cur); cur = { ...nxt }; }
+  }
+  merged.push(cur);
   return merged;
 }
 
-function determineProteinLength(structureComponent) {
+function determineProteinLength(structComp) {
   try {
-    if (structureComponent?.structure?.residueStore?.resno?.length > 0) {
-      proteinLength = Math.max(...structureComponent.structure.residueStore.resno);
+    if (structComp?.structure?.residueStore?.resno?.length) {
+      proteinLength = Math.max(...structComp.structure.residueStore.resno);
       return;
     }
   } catch {}
-  try {
-    proteinLength = Math.max(...domainData.map(d => d.end));
-  } catch {
-    proteinLength = 1;
-  }
+  proteinLength = Math.max(...domainData.map(d => d.end), 1);
+}
+
+function colourMap(domains) {
+  const map = {};
+  let idx = 0;
+  domains.forEach(d => {
+    if (!map[d.name]) map[d.name] = colors[idx++ % colors.length];
+  });
+  return map;
+}
+
+function showStatus(msg, type = "info") {
+  statusDiv.textContent = msg;
+  statusDiv.style.color =
+    { error: "red", success: "green", warning: "darkorange", info: "black" }[type] || "black";
+}
+
+// ---------- VISUALS ----------
+function displayDomains() {
+  return mergeToggle.checked ? mergeAdjacent(domainData) : domainData;
 }
 
 function applyRepresentations() {
   if (!currentStructureComponent) return;
-  const displayDomains = getDisplayDomains();
-  const domainColorMap = assignDomainColors(displayDomains);
-
+  const disp = displayDomains();
+  const cmap = colourMap(disp);
   const style = styleSelect.value;
+
   currentStructureComponent.removeAllRepresentations();
   currentStructureComponent.addRepresentation(style, {
     color: "lightgray",
     disableImpostor: true,
     disablePicking: true
   });
-  displayDomains.forEach(domain => {
+  disp.forEach(dom => {
     currentStructureComponent.addRepresentation(style, {
-      sele: `${domain.start}-${domain.end}`,
-      color: domainColorMap[domain.name],
+      sele: `${dom.start}-${dom.end}`,
+      color: cmap[dom.name],
       disableImpostor: true,
       disablePicking: true
     });
@@ -356,152 +379,141 @@ function applyRepresentations() {
   currentStructureComponent.autoView();
 }
 
-function createDomainBar() {
-  const displayDomains = getDisplayDomains();
+function buildDomainBar() {
+  const disp = displayDomains();
   domainBarDiv.innerHTML = "";
   document.getElementById("tick-container")?.remove();
-  if (!displayDomains.length || proteinLength <= 0) return;
+  if (!disp.length || proteinLength <= 0) return;
 
-  const domainColorMap = assignDomainColors(displayDomains);
+  const cmap = colourMap(disp);
   const tickContainer = document.createElement("div");
   tickContainer.id = "tick-container";
   tickContainer.style = "position:relative;height:18px;margin-bottom:5px;";
 
-  displayDomains.forEach((domain, index) => {
-    const color = domainColorMap[domain.name];
-    const segment = document.createElement("div");
-    segment.className = "domain-segment";
-    segment.dataset.domainIndex = index;
-    segment.style.left = `${((domain.start - 1) / proteinLength) * 100}%`;
-    segment.style.width = `${((domain.end - domain.start + 1) / proteinLength) * 100}%`;
-    segment.style.backgroundColor = color;
-    segment.title = `${domain.name} (${domain.start}-${domain.end}) - Click to mark incorrect`;
+  disp.forEach((dom, i) => {
+    const seg = document.createElement("div");
+    seg.className = "domain-segment";
+    seg.dataset.domainIndex = i;
+    seg.style.left  = `${((dom.start - 1) / proteinLength) * 100}%`;
+    seg.style.width = `${((dom.end - dom.start + 1) / proteinLength) * 100}%`;
+    seg.style.backgroundColor = cmap[dom.name];
+    seg.title = `${dom.name} (${dom.start}-${dom.end}) – click to toggle`;
 
     const label = document.createElement("span");
-    label.textContent = domain.name;
-    label.style = "color:white;font-weight:bold;font-size:0.75rem;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none";
-    segment.appendChild(label);
-
-    segment.addEventListener("click", handleDomainClick);
-
-    domainBarDiv.appendChild(segment);
+    label.textContent = dom.name;
+    label.style =
+      "color:white;font-weight:bold;font-size:0.75rem;position:absolute;left:50%;top:50%;" +
+      "transform:translate(-50%,-50%);pointer-events:none";
+    seg.appendChild(label);
+    seg.addEventListener("click", onDomainClick);
+    domainBarDiv.appendChild(seg);
 
     const tick = document.createElement("div");
-    tick.style = `position:absolute;left:${((domain.start - 1) / proteinLength) * 100}%;transform:translateX(-50%);font-size:0.7rem;color:#555`;
-    tick.textContent = domain.start;
+    tick.style =
+      `position:absolute;left:${((dom.start - 1) / proteinLength) * 100}%` +
+      ";transform:translateX(-50%);font-size:0.7rem;color:#555";
+    tick.textContent = dom.start;
     tickContainer.appendChild(tick);
   });
-
   domainBarDiv.parentElement.insertBefore(tickContainer, domainBarDiv);
 
   if (!mergeToggle.checked) {
-    domainIsWrong.forEach((wrong, i) => {
-      if (wrong) domainBarDiv.children[i]?.classList.add("wrong");
-    });
+    domainIsWrong.forEach((w, i) => { if (w) domainBarDiv.children[i]?.classList.add("wrong"); });
   }
 }
 
-function updateMergeToggleAvailability() {
-  const anyMarkedWrong = domainIsWrong.some(isWrong => isWrong);
-  const label = mergeToggle.closest('.toggle-label');
-
-  if (anyMarkedWrong) {
+function updateMergeToggleState() {
+  const anyWrong = domainIsWrong.some(Boolean);
+  const label = mergeToggle.closest(".toggle-label");
+  if (anyWrong) {
     mergeToggle.checked = false;
     mergeToggle.disabled = true;
-    label.classList.add('disabled');
+    label.classList.add("disabled");
     localStorage.setItem("mergeSameDomains", "false");
-    applyRepresentations();
-    createDomainBar();
   } else {
     mergeToggle.disabled = false;
-    label.classList.remove('disabled');
+    label.classList.remove("disabled");
   }
 }
-    
 
-function handleDomainClick(event) {
-  if (mergeToggle?.checked) {
+// ---------- HANDLERS ----------
+function onDomainClick(e) {
+  if (mergeToggle.checked) {
     mergeToggle.checked = false;
     localStorage.setItem("mergeSameDomains", "false");
     applyRepresentations();
-    createDomainBar();
-    return;  // Require second click
+    buildDomainBar();
+    return; // require second click
   }
-
-  const index = parseInt(event.currentTarget.dataset.domainIndex, 10);
-  if (isNaN(index)) return;
-
-  domainIsWrong[index] = !domainIsWrong[index];
-  event.currentTarget.classList.toggle("wrong", domainIsWrong[index]);
-
-  updateMergeToggleAvailability();
-}
-
-
-function getDisplayDomains() {
-  return mergeToggle?.checked ? mergeSameTypeAdjacentDomains(domainData) : domainData;
-}
-
-function assignDomainColors(domains) {
-  const map = {};
-  let i = 0;
-  for (const d of domains) {
-    if (!map[d.name]) map[d.name] = colors[i++ % colors.length];
-  }
-  return map;
-}
-
-function showStatus(message, type = "info") {
-  statusMessageDiv.textContent = message;
-  statusMessageDiv.style.color = {
-    error: "red", success: "green", warning: "orange", info: "black"
-  }[type] || "black";
+  const idx = +e.currentTarget.dataset.domainIndex;
+  if (!Number.isInteger(idx)) return;
+  domainIsWrong[idx] = !domainIsWrong[idx];
+  e.currentTarget.classList.toggle("wrong", domainIsWrong[idx]);
+  updateMergeToggleState();
 }
 
 async function handleSave() {
   const corrections = domainData.filter((_, i) => domainIsWrong[i]);
-  const payload = { protein_pk: proteinPk, folder_id: folderId, corrections };
+  const payload     = { protein_pk: proteinPk, folder_id: folderId, corrections };
+
+  showStatus("Saving…", "info");
+  saveBtn.disabled = true;
+  // nextBtn.classList.add("disabled");
+
   try {
-    showStatus("Saving...", "info");
-    saveBtn.disabled = true;
-    nextBtn.classList.add("disabled");
     const res = await fetch(saveUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        ...(csrftoken ? { "X-CSRFToken": csrftoken } : {})
+      },
       body: JSON.stringify(payload)
     });
-    const result = await res.json();
+
+    const ctype = res.headers.get("content-type") || "";
+    let result;
+    if (ctype.includes("application/json")) {
+      result = await res.json();
+    } else {
+      const text = await res.text();
+      throw new Error(`Non-JSON response (${res.status}): ${text.slice(0,200)}…`);
+    }
+
     if (res.ok && result.success) {
-      showStatus("Saved! Redirecting...", "success");
-      window.location.href = nextProteinFinderUrl;
-    } else throw new Error(result.error || "Unknown error");
-  } catch (e) {
-    showStatus(`Save failed: ${e.message}`, "error");
+      showStatus("Saved! Redirecting…", "success");
+      window.location.href = nextProteinUrl;
+    } else {
+      throw new Error(result.error || "Unknown error");
+    }
+  } catch (err) {
+    showStatus(`Save failed: ${err.message}`, "error");
     saveBtn.disabled = false;
-    nextBtn.classList.remove("disabled");
+    // nextBtn.classList.remove("disabled");
   }
 }
 
-// --- Initialize everything ---
+// ---------- INITIALISATION ----------
 document.addEventListener("DOMContentLoaded", async () => {
   if (!proteinPk || !folderId) return showStatus("Missing identifiers", "error");
 
-  domainIsWrong = domainData.map(d => markedWrong.some(w => w.name === d.name && w.start === d.start && w.end === d.end));
-  updateMergeToggleAvailability();
+  domainIsWrong = domainData.map(d =>
+    markedWrong.some(w => w.name === d.name && w.start === d.start && w.end === d.end)
+  );
+  updateMergeToggleState();
 
-  if (mergeToggle) {
-    const saved = localStorage.getItem("mergeSameDomains");
-    if (saved !== null) mergeToggle.checked = saved === "true";
-    mergeToggle.addEventListener("change", () => {
-      localStorage.setItem("mergeSameDomains", mergeToggle.checked);
-      applyRepresentations();
-      createDomainBar();
-    });
-  }
+  const stored = localStorage.getItem("mergeSameDomains");
+  if (stored !== null) mergeToggle.checked = stored === "true";
+
+  mergeToggle.addEventListener("change", () => {
+    localStorage.setItem("mergeSameDomains", mergeToggle.checked);
+    applyRepresentations();
+    buildDomainBar();
+  });
 
   stage = new NGL.Stage("viewport", { backgroundColor: "white", fog: false });
-  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2, fogNear: 100, fogFar: 100, fog: false });
-
+  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2, fog: false });
   window.addEventListener("resize", () => stage.handleResize());
 
   try {
@@ -513,22 +525,50 @@ document.addEventListener("DOMContentLoaded", async () => {
       viewportDiv.innerHTML = "<p style='text-align:center;color:#555;'>No 3D structure.</p>";
     }
     applyRepresentations();
-    createDomainBar();
+    buildDomainBar();
     if (isSpinning && currentStructureComponent) stage.setSpin(spinAxis, spinSpeed);
   } catch (e) {
     console.error(e);
     viewportDiv.innerHTML = `<p style='color:red;text-align:center;'>${e.message}</p>`;
   }
 
-  toggleSpinBtn?.addEventListener("click", () => {
+  toggleSpinBtn.addEventListener("click", () => {
     isSpinning = !isSpinning;
     stage.setSpin(isSpinning ? spinAxis : null, isSpinning ? spinSpeed : 0);
     toggleSpinBtn.textContent = isSpinning ? "Pause Rotation" : "Resume Rotation";
   });
 
-  styleSelect?.addEventListener("change", () => applyRepresentations());
-  saveBtn?.addEventListener("click", handleSave);
+  styleSelect.addEventListener("change", applyRepresentations);
+  saveBtn.addEventListener("click", handleSave);
 });
+// already have: const undoBtn = document.getElementById("undoBtn");
+if (undoBtn) {
+  undoBtn.addEventListener("click", () => {
+    fetch("{% url 'annotations_app:undo' %}", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrftoken ? { "X-CSRFToken": csrftoken } : {}),
+      },
+      body: JSON.stringify({ folder_id: folderId })  // ← send the folder
+    })
+    .then(res => res.ok ? res.json() : Promise.reject(res))
+    .then(data => {
+      if (data.success) {
+        // server gives us the correct page to go back to
+        window.location.href = data.redirect_url || window.location.href;
+      } else {
+        showStatus(`Undo failed: ${data.error || "unknown error"}`, "error");
+      }
+    })
+    .catch(err => {
+      showStatus(`Undo request failed (${err.status || ""})`, "error");
+    });
+  });
+}
+
 </script>
+
 
 {% endblock %}

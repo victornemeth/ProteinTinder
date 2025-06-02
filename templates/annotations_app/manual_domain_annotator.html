@@ -126,6 +126,9 @@
     <div class="action-buttons">
       <button id="addDomainBtn" title="Add a default domain at the end">Add Default Domain</button>
       <button id="saveBtn">Save Annotations</button>
+      <!-- inside the .action-buttons block, just before Delete -->
+<button id="undoBtn" class="button secondary">↩️ Undo Last</button>
+
       <!-- <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" -->
       <!-- <a href="{{ next_protein_url }}"
          id="nextBtn" class="button secondary">Skip & Go Next</a> -->
@@ -134,6 +137,7 @@
            href="{% url 'annotations_app:domain_annotation_overview' folder_id=folder.id %}">
            🔍 Overview
         </a>
+      
       <button id="deleteDomainBtn" disabled
               title="Click a domain on the bar to enable delete">Delete Selected</button>
     </div>
@@ -179,6 +183,7 @@ const ui = {
   toggleSpinBtn      : document.getElementById('toggleSpinBtn'),
   styleSelect        : document.getElementById('styleSelect'),
   statusMessage      : document.getElementById('status-message'),
+  undoBtn            : document.getElementById('undoBtn'),
 };
 
 /* ----------  COLOUR HANDLING  ---------- */
@@ -725,5 +730,29 @@ document.addEventListener('DOMContentLoaded',async()=>{
     deselectDomain();
   },true);
 });
+/* ----------  UNDO  ---------- */
+if (ui.undoBtn) {
+  ui.undoBtn.addEventListener('click', () => {
+fetch("{% url 'annotations_app:undo_manual_domain' %}", {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCSRFCookie(),
+    },
+    body: JSON.stringify({ folder_id: folderId }),
+})
+.then(r => r.json())
+.then(data => {
+    if (data.success) {
+        window.location.href = data.redirect_url;
+    } else {
+        updateStatus(data.error || "Undo failed", "error");
+    }
+})
+.catch(err => updateStatus(err.message, "error"));
+
+  });
+}
+
 </script>
 {% endblock %}
