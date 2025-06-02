@@ -23,7 +23,7 @@ urlpatterns = [
 
     # --- Action Endpoints ---
     # For undoing standard swipe annotation (from annotate.html)
-    path('annotate/undo/', views.undo_annotation, name='undo'),
+    path('annotate/undo/', views.undo_last, name='undo'),
     # path('annotate/undo_domain_correction/', views.undo_domain_correction, name='undo_domain_correction'), # Add later if needed
 
     # --- Folder Actions ---
@@ -63,4 +63,6 @@ urlpatterns = [
         views.domain_annotation_download,
         name="domain_annotation_download",
     ),
+    path("undo/manual/", views.undo_last_manual_domain, name="undo_manual_domain"),
+
 ]

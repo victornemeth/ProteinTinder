@@ -23,7 +23,7 @@ from django.contrib import messages
 
 from .forms import CustomUserCreationForm, PDBZipUploadForm
 # Import DomainCorrection model
-from .models import ProteinFolder, Protein, Annotation, DomainCorrection
+from .models import ProteinFolder, Protein, Annotation, DomainCorrection, ManualDomainAnnotation
 from django.db.models import Exists, OuterRef
 from django.urls import reverse
 
@@ -340,7 +340,6 @@ def upload_zip_view(request):
         form = PDBZipUploadForm()
     return render(request, 'annotations_app/upload_zip.html', {'form': form})
 
-from django.contrib.auth import get_user_model
 
 @login_required
 def view_folders(request):
@@ -608,52 +607,6 @@ def download_annotations_csv(request, folder_id):
     return response
 
 
-# --- Standard Annotation Undo (Keep as is, maybe adjust redirect/response) ---
-@require_POST
-@login_required
-def undo_annotation(request):
-    """ Undoes the last *standard* annotation """
-    user = request.user
-    try:
-        # Find the most recent standard annotation by this user
-        last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
-        protein = last_annotation.protein
-        folder_id = protein.folder_id
-
-        last_annotation.delete()
-        # Delete associated domain corrections too
-        DomainCorrection.objects.filter(user=user, protein=protein).delete()
-
-
-        messages.info(request, f"Removed last annotation for protein {protein.protein_id}.")
-
-        # Option 1: Respond with JSON (preferred if JS handles UI update without reload)
-        return JsonResponse({
-             "success": True,
-             "message": f"Annotation for {protein.protein_id} removed.",
-             "protein_pk": protein.pk,
-             "folder_id": folder_id,
-         })
-
-        # Option 2: Redirect back to the specific protein's annotation page (causes full reload)
-        # return redirect('annotations_app:annotate_specific_protein', folder_id=folder_id, protein_pk=protein.pk)
-
-    except Annotation.DoesNotExist:
-         # Option 1: JSON error
-         return JsonResponse({"success": False, "error": "No previous annotation found."}, status=404)
-         # Option 2: Message and redirect
-         # messages.error(request, "No previous annotation found to undo.")
-         # return redirect('annotations_app:view_folders') # Fallback
-    except Exception as e:
-        logger.error(f"Error during standard undo: {e}", exc_info=True)
-        # Option 1: JSON error
-        return JsonResponse({"success": False, "error": f"Server error: {str(e)}"}, status=500)
-        # Option 2: Message and redirect
-        # messages.error(request, "An error occurred while trying to undo.")
-        # return redirect('annotations_app:view_folders')
-
-
-
 @login_required
 def annotation_overview(request, folder_id):
     folder = get_object_or_404(ProteinFolder, id=folder_id)
@@ -868,45 +821,105 @@ def submit_domain_correction(request):
         logger.error("Domain-correction save failed: %s", e, exc_info=True)
         return JsonResponse({"error": f"Server error: {e}"}, status=500)
 
-# ... (keep download_annotations_csv, undo_standard_annotation, annotation_overview, redo_folder_view)
-
-# Renamed original undo view
 @require_POST
 @login_required
-def undo_standard_annotation(request):
-    """ Undoes the last *standard* annotation (correct/wrong/unsure) """
-    user = request.user
+def undo_last(request):
+    user = request.user                              # ←  back in place!
+
+    # ------------------------------------------------------------------
+    # read the optional folder_id that the JS sends
+    # ------------------------------------------------------------------
     try:
-        # Get the last annotation
-        last_annotation = Annotation.objects.filter(user=user).latest("timestamp")
-        protein = last_annotation.protein
-        folder = protein.folder
-        folder_id = folder.id
+        payload = json.loads(request.body or "{}")
+    except ValueError:
+        payload = {}
 
-        # Delete the annotation
-        last_annotation.delete()
-        # Optionally delete domain corrections too
-        DomainCorrection.objects.filter(user=user, protein=protein).delete()
+    folder_id = payload.get("folder_id")
 
-        # Check if any annotations remain in this folder
-        remaining = Annotation.objects.filter(user=user, folder=folder).exists()
+    # ------------------------------------------------------------------
+    # find the most-recent annotation *for this user (and folder)*
+    # ------------------------------------------------------------------
+    qs = Annotation.objects.filter(user=user)
+    if folder_id:
+        qs = qs.filter(folder_id=folder_id)
 
-        if remaining:
-            messages.info(request, f"Removed annotation for protein {protein.protein_id}.")
-            return redirect('annotations_app:annotate_protein', folder_id=folder_id)
-        else:
-            messages.info(request, f"Removed last annotation in folder '{folder.name}'. Returning to folder list.")
-            return redirect('annotations_app:view_folders')
-
+    try:
+        last = qs.latest("timestamp")
     except Annotation.DoesNotExist:
-        messages.error(request, "No previous annotation found to undo.")
-        return redirect('annotations_app:view_folders')
+        return JsonResponse(
+            {"success": False, "error": "You haven’t saved anything yet."},
+            status=404,
+        )
 
-    except Exception as e:
-        logger.error(f"Error during standard undo: {e}", exc_info=True)
-        messages.error(request, "An error occurred while trying to undo.")
-        return redirect('annotations_app:view_folders')
+    protein = last.protein
 
+    # ------------------------------------------------------------------
+    # delete the annotation and all its auxiliary rows
+    # ------------------------------------------------------------------
+    last.delete()
+    DomainCorrection.objects.filter(user=user, protein=protein).delete()
+    # ManualDomainAnnotation.objects.filter(user=user, protein=protein).delete()
+
+    # ------------------------------------------------------------------
+    # tell the browser to open that protein again
+    # ------------------------------------------------------------------
+    return JsonResponse(
+        {
+            "success": True,
+            "redirect_url": reverse(
+                "annotations_app:annotate_specific_protein",
+                args=[protein.folder_id, protein.pk],
+            ),
+        }
+    )
+
+# views.py
+@require_POST
+@login_required
+def undo_last_manual_domain(request):
+    """
+    Roll back the **last set of manual-domain splits** you saved,
+    without touching any structure/architecture annotations.
+
+    • It looks only at `ManualDomainAnnotation` rows.  
+    • It removes every split for that protein and user.  
+    • It leaves the `Annotation` table completely untouched.
+    """
+    user = request.user
+
+    # optional folder filter coming from JS ---------------------------------
+    try:
+        payload = json.loads(request.body or "{}")
+    except ValueError:
+        payload = {}
+    folder_id = payload.get("folder_id")
+
+    # locate the most-recent manual-domain entry ----------------------------
+    qs = ManualDomainAnnotation.objects.filter(user=user)
+    if folder_id:
+        qs = qs.filter(protein__folder_id=folder_id)
+
+    last_split = qs.order_by("-id").first()          # id ≈ insertion order
+    if not last_split:
+        return JsonResponse(
+            {"success": False,
+             "error": "You haven’t saved any manual domains yet."},
+            status=404,
+        )
+
+    protein = last_split.protein
+
+    # wipe all manual splits for that protein/user --------------------------
+    ManualDomainAnnotation.objects.filter(user=user, protein=protein).delete()
+
+    # redirect back to the same protein in the manual flow ------------------
+    redirect_url = reverse(
+        "annotations_app:manual_annotate_folder",
+        args=[protein.folder_id],                    # one-arg URL variant
+        # args=[protein.folder_id, protein.pk],      # if your URL expects both
+    )
+
+    return JsonResponse({"success": True, "redirect_url": redirect_url})
 
 @login_required
 @login_required
@@ -1060,7 +1073,7 @@ def delete_folder(request, folder_id):
     return redirect('annotations_app:view_folders')
 
 # --- Additional View for Saving Manual Domain Annotations ---
-from .models import ManualDomainAnnotation  # Add this model to store manual domains (create if missing)
+
 
 @login_required
 @require_POST
@@ -1092,18 +1105,6 @@ def submit_manual_domains(request):
             for d in domains if all(k in d for k in ("name", "start", "end"))
         ]
         ManualDomainAnnotation.objects.bulk_create(new_objs)
-
-        # Mark protein as annotated
-        Annotation.objects.update_or_create(
-            protein=protein,
-            user=user,
-            defaults={
-                "folder": protein.folder,
-                "annotation_title": protein.folder.title,
-                "given_annotation": "correct",
-                "timestamp": timezone.now()
-            }
-        )
 
         return JsonResponse({"success": True, "message": f"Saved {len(new_objs)} domain annotations."})
 
