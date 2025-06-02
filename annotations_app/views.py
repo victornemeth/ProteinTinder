@@ -25,6 +25,7 @@ from .forms import CustomUserCreationForm, PDBZipUploadForm
 # Import DomainCorrection model
 from .models import ProteinFolder, Protein, Annotation, DomainCorrection
 from django.db.models import Exists, OuterRef
+from django.urls import reverse
 
 import csv
 from django.http import HttpResponse
@@ -1100,3 +1101,160 @@ def manual_annotate_protein_view(request):
     }
 
     return render(request, 'annotations_app/manual_domain_annotator.html', context)
+
+@login_required
+@ensure_csrf_cookie
+def manual_annotate_folder_view(request, folder_id, protein_pk=None):
+    """
+    Serve manual_domain_annotator.html for one protein at a time,
+    restricted to the selected folder and to structures that do NOT
+    already have a domain CSV.
+    """
+    user   = request.user
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+
+    # only the PDB-only proteins for this folder
+    proteins_qs = Protein.objects.filter(folder=folder,
+                                         domain_csv_path__isnull=True)
+
+    if not proteins_qs.exists():
+        messages.warning(request,
+                         "Every structure in this folder already has "
+                         "predicted domains – use the architecture flow instead.")
+        return redirect('annotations_app:view_folders')
+
+    # ── decide which protein to show ─────────────────────────────────
+    if protein_pk:                                    # explicit redo
+        protein = get_object_or_404(proteins_qs, pk=protein_pk)
+    else:                                             # next un-annotated
+        done_ids = Annotation.objects.filter(
+            user=user, folder=folder
+        ).values_list('protein_id', flat=True)
+        protein = proteins_qs.exclude(pk__in=done_ids).first()
+
+        if not protein:
+            messages.info(request,
+                          f"You finished domain-annotating “{folder.name}”.")
+            return redirect('annotations_app:annotation_overview',
+                            folder_id=folder.id)
+
+    # ── pre-fill any manual domains the user already saved ───────────
+    existing = ManualDomainAnnotation.objects.filter(
+        protein=protein, user=user
+    ).order_by('start_pos')
+    domain_data = [
+        {'name': d.domain_name, 'start': d.start_pos, 'end': d.end_pos}
+        for d in existing
+    ]
+
+    context = {
+        'protein'           : protein,
+        'folder'            : folder,
+        'folder_id'         : folder.id,
+        'annotation_title'  : folder.title or "Manual Annotation",
+        'annotation_description': folder.description,
+        'media_url'         : settings.MEDIA_URL,
+        'pdb_url'           : (default_storage.url(protein.pdb_file_path)
+                               if protein.pdb_file_path else None),
+        'domain_data'       : domain_data,
+        'marked_wrong_data' : [],
+        'csv_error'         : None,
+        'next_protein_url'  : reverse('annotations_app:manual_annotate_folder',
+                                      args=[folder.id]),
+    }
+    return render(request,
+                  'annotations_app/manual_domain_annotator.html',
+                  context)
+
+
+# annotations_app/views.py  (append near the other overview views)
+@login_required
+def domain_annotation_overview(request, folder_id):
+    """
+    List every protein that CURRENT (or selected) user has
+    manually split into domains, together with the domains.
+    """
+    from collections import defaultdict
+    folder = get_object_or_404(ProteinFolder, id=folder_id)
+
+    # -- whose annotations do we show? (same logic as annotation_overview)
+    user_id   = request.GET.get("user")
+    User      = get_user_model()
+    target_user = request.user if not user_id or user_id == str(request.user.id) \
+                  else get_object_or_404(User, id=user_id)
+
+    qs = ManualDomainAnnotation.objects.filter(
+            protein__folder=folder,
+            user=target_user
+         ).select_related("protein")
+
+    protein_to_domains = defaultdict(list)
+    for d in qs:
+        protein_to_domains[d.protein].append(d)
+
+    users = User.objects.all()
+
+    # ⬇ NEW – convert to a sortable list of (protein, [domains]) tuples
+    protein_domain_list = [
+        (protein, doms) for protein, doms in protein_to_domains.items()
+    ]
+    protein_domain_list.sort(key=lambda t: t[0].protein_id)   # nice ordering
+
+    return render(
+        request,
+        "annotations_app/domain_annotation_overview.html",
+        {
+            "folder"            : folder,
+            "protein_to_domains": protein_domain_list,   # 👈 pass the list
+            "media_url"         : settings.MEDIA_URL,
+            "target_user"       : target_user,
+            "users"             : users,
+        },
+    )
+
+@login_required
+def domain_annotation_download(request, folder_id):
+    """
+    Stream a ZIP containing one CSV per protein in the folder.
+    CSV header: Domain Number, Start Residue, End Residue, Predicted Domain
+    Data source: Protein.manual_domain_annotations
+    """
+    folder = get_object_or_404(ProteinFolder, pk=folder_id)
+
+    # build the ZIP in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+
+        proteins = (
+            Protein.objects.filter(folder=folder)
+            .prefetch_related("manual_domain_annotations")  # ← correct related_name
+            .order_by("protein_id")
+        )
+
+        any_written = False
+        for protein in proteins:
+            domains = protein.manual_domain_annotations.all().order_by("start_pos")
+            if not domains.exists():
+                continue          # skip proteins with no annotations
+
+            any_written = True
+            csv_io = io.StringIO()
+            writer = csv.writer(csv_io)
+            writer.writerow(
+                ["Domain Number", "Start Residue", "End Residue", "Predicted Domain"]
+            )
+            for idx, d in enumerate(domains, start=1):
+                writer.writerow([idx, d.start_pos, d.end_pos, d.domain_name])
+
+            zf.writestr(f"{protein.protein_id}.csv", csv_io.getvalue())
+
+        if not any_written:
+            raise Http404("No domain annotations found in this folder.")
+
+    # return the file
+    zip_buffer.seek(0)
+    response = HttpResponse(zip_buffer.read(), content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="domain_annotations_{folder.id}.zip"'
+    )
+    return response
