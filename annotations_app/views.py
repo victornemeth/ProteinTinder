@@ -344,36 +344,65 @@ from django.contrib.auth import get_user_model
 
 @login_required
 def view_folders(request):
-    folders = ProteinFolder.objects.all().order_by('name')
-    folders = folders.annotate(
+    """
+    Show all folders, but *already* ordered the way the UI should display them:
+        1. My folders first
+        2. Within each owner-group: Architecture 🏟️ before Structure-only 🧬
+        3. Finally alphabetical by folder name (case-insensitive)
+    """
+
+    # Base queryset (order_by is optional because we will sort in Python anyway)
+    folders = ProteinFolder.objects.all().annotate(
         has_architecture_data=Exists(
             Protein.objects.filter(
-                folder=OuterRef('pk'),
-                domain_csv_path__isnull=False
+                folder=OuterRef("pk"),
+                domain_csv_path__isnull=False,
             )
         )
     )
+
     folder_data = []
     for folder in folders:
         total_proteins = folder.proteins.count()
-        annotated_count = Annotation.objects.filter(folder=folder, user=request.user).count()
+        annotated_count = Annotation.objects.filter(
+            folder=folder, user=request.user
+        ).count()
         is_complete = total_proteins > 0 and total_proteins == annotated_count
-        folder_data.append({
-            'folder': folder,
-            'is_architecture': folder.has_architecture_data,
-            'is_complete': is_complete,
-            'total_proteins': total_proteins,
-            'annotated_count': annotated_count,
-        })
+        folder_data.append(
+            {
+                "folder": folder,
+                "is_architecture": folder.has_architecture_data,
+                "is_complete": is_complete,
+                "total_proteins": total_proteins,
+                "annotated_count": annotated_count,
+            }
+        )
 
-    User = get_user_model()
-    users = User.objects.all()
+    # ----------  KEY:  sort in the exact order we want  ----------
+    #
+    #   • False < True, so `folder.user != request.user` gives:
+    #       0  → my folder
+    #       1  → someone else's
+    #
+    #   • `not is_architecture` gives:
+    #       0  → architecture
+    #       1  → structure-only
+    #
+    #   • Finally sort by name as a tie-breaker.
+    folder_data.sort(
+        key=lambda d: (
+            d["folder"].user != request.user,
+            not d["is_architecture"],
+            d["folder"].name.lower(),
+        )
+    )
+    # ----------------------------------------------------------------
 
-    return render(request, 'annotations_app/folder_list.html', {
-        'folder_data': folder_data,
-        'users': users,
-    })
-
+    return render(
+        request,
+        "annotations_app/folder_list.html",
+        {"folder_data": folder_data, "users": get_user_model().objects.all()},
+    )
 
 def signup_view(request):
     if request.method == 'POST':
