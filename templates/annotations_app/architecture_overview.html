@@ -1,226 +1,178 @@
+{# templates/annotations_app/architecture_overview.html #}
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ folder.name }} – Architecture Overview{% endblock %}
 
-{% block content %}
+{% block head %}
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
 <style>
-  .overview-container {
-    max-width: 1000px;
-    margin: 40px auto;
-    padding: 30px;
-    background: #ffffff;
-    border-radius: 16px;
-    border: 1px solid #e0e0e0;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
-    font-family: 'Segoe UI', sans-serif;
-    position: relative;
-  }
+/* ------- identical grid / card look to the domain overview ---------- */
+.container        {max-width:1100px;margin:auto;background:#fff;padding:20px;
+                   border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+h2                {margin-bottom:15px;font-size:1.6em}
+.switch-btn       {float:right;margin-left:10px;font-size:.9em;
+                   background:#e9ecef;color:#495057;padding:6px 10px;
+                   border-radius:4px;text-decoration:none}
+.switch-btn:hover {background:#dee2e6}
 
-  .overview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 25px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
+.protein-grid     {display:grid;grid-gap:20px;
+                   grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
+.card             {border:1px solid #dee2e6;border-radius:6px;background:#fff;
+                   box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden}
 
-  .overview-header h2 {
-    font-size: 1.8rem;
-    font-weight: 600;
-    color: #212529;
-    margin: 0;
-  }
+.viewer           {height:220px;background:#f0f0f0;position:relative;}
+.viewer canvas    {position:absolute;top:0;left:0;width:100%}
 
-  .download-btn {
-    background-color: #e0e7ff;
-    border: none;
-    color: #1d4ed8;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 600;
-    text-decoration: none;
-    font-size: 0.95rem;
-    transition: background-color 0.2s ease;
-  }
+.info             {padding:10px;text-align:center}
+.info h4          {margin:0 0 6px 0;font-size:.95em;
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info ul          {list-style:none;padding:0;margin:0 0 6px 0;font-size:.8em}
+.info li          {margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-  .download-btn:hover {
-    background-color: #c7d2fe;
-  }
+.wrong-domain     {color:#c0392b;font-weight:700;}
 
-  .overview-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.95em;
-  }
+.btn              {display:inline-block;font-size:.8em;padding:6px 12px;
+                   border-radius:4px;background:#0d6efd;color:#fff;text-decoration:none;
+                   transition:background .15s,box-shadow .15s}
+.btn:hover        {background:#0b5ed7;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+.btn--secondary   {background:#6c757d}.btn--secondary:hover{background:#5c636a}
 
-  .overview-table thead tr {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
-  }
-
-  .overview-table th,
-  .overview-table td {
-    padding: 14px 12px;
-    text-align: left;
-    vertical-align: top;
-  }
-
-  .overview-table tr {
-    transition: background-color 0.2s ease;
-  }
-
-  .overview-table tr:hover {
-    background-color: #f1f3f5;
-  }
-
-  .status-clean {
-    background-color: #e6f4ea;
-    color: #207544;
-    padding: 6px 12px;
-    border-radius: 8px;
-    display: inline-block;
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-
-  .status-issues {
-    background-color: #fdecea;
-    color: #a02020;
-    padding: 6px 12px;
-    border-radius: 8px;
-    display: inline-block;
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-
-  .domain-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .domain-list li {
-    margin-bottom: 4px;
-    font-size: 0.9rem;
-  }
-
-  .view-link {
-    background-color: #f0f0f0;
-    padding: 6px 10px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: 500;
-    color: #333;
-    transition: all 0.2s ease;
-    display: inline-block;
-  }
-
-  .view-link:hover {
-    background-color: #dbeafe;
-    color: #1d4ed8;
-  }
-
-  @media (max-width: 768px) {
-    .overview-container {
-      padding: 20px;
-      border-radius: 10px;
-    }
-
-    .overview-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .overview-table thead {
-      display: none;
-    }
-
-    .overview-table tr {
-      display: block;
-      margin-bottom: 25px;
-      border: 1px solid #eee;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
-    }
-
-    .overview-table td {
-      display: block;
-      padding: 8px 0;
-      text-align: left;
-    }
-
-    .overview-table td::before {
-      content: attr(data-label);
-      font-weight: 600;
-      color: #6c757d;
-      display: block;
-      margin-bottom: 2px;
-    }
-  }
+/* pagination bar (unchanged) */
+.pagination-global{text-align:center;margin:20px 0;font-size:.9em;display:none}
+.pagination-global button{
+    background:#0d6efd;color:#fff;border:none;padding:6px 12px;margin:0 6px;
+    border-radius:4px;cursor:pointer}
+.pagination-global button:disabled{background:#ccc;cursor:not-allowed}
+.pagination-global .page-info{margin:0 8px;color:#495057}
+@media(max-width:767px){.pagination-global{font-size:.8em}}
 </style>
 
-<div class="overview-container">
-  <div class="overview-header">
-    <h2>{{ folder.name }} <small style="font-size: 0.65em; color: #6c757d;">Architecture Review Summary</small></h2>
-      <div style="margin-bottom: 15px;">
-    <label for="peek-user">👁 Annotated by :</label>
-<select id="peek-user" onchange="if(this.value) window.location.href=this.value;">
-    {% for u in users %}
-        <option value="{% url 'annotations_app:architecture_annotation_overview' folder.id %}?user={{ u.id }}"
-                {% if u.id == target_user.id %}selected{% endif %}>
-            {{ u.username }}
-        </option>
-    {% endfor %}
-</select>
+<script src="https://cdn.jsdelivr.net/npm/ngl@2.0.0-dev.39/dist/ngl.js"></script>
+{% endblock %}
 
-</div>
+{% block content %}
+<div class="container">
 
+  <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Folder list</a>
+  <!-- <a href="{% url 'annotations_app:domain_annotation_overview' folder.id %}" class="switch-btn">↔ Domain overview</a> -->
 
+  <h2>{{ folder.name }} <small style="font-size:.65em;color:#6c757d">Architecture review</small></h2>
+
+  <div style="margin-bottom:15px">
+      <label>👁 Annotated by:</label>
+      <select onchange="if(this.value)location.href=this.value;">
+        {% for u in users %}
+          <option value="{% url 'annotations_app:architecture_annotation_overview' folder.id %}?user={{u.id}}"
+                  {% if target_user.id == u.id %}selected{% endif %}>{{u.username}}</option>
+        {% endfor %}
+      </select>
   </div>
 
-  {% if protein_to_domains %}
-    <table class="overview-table">
-      <thead>
-        <tr>
-          <th>Protein ID</th>
-          <th>Status</th>
-          <th>Marked Domains</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for protein, corrections in protein_to_domains %}
-        <tr>
-          <td data-label="Protein ID">{{ protein.protein_id }}</td>
-          <td data-label="Status">
-            {% if corrections %}
-              <span class="status-issues">❌ {{ corrections|length }} domain{{ corrections|length|pluralize }} marked</span>
-            {% else %}
-              <span class="status-clean">✅ No domains marked</span>
-            {% endif %}
-          </td>
-          <td data-label="Marked Domains">
-            {% if corrections %}
-              <ul class="domain-list">
-                {% for c in corrections %}
-                  <li>{{ c.domain_name }} ({{ c.start_pos }}–{{ c.end_pos }})</li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <em style="color: #6c757d;">None</em>
-            {% endif %}
-          </td>
-          <td data-label="Actions">
-            <a class="view-link" href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}">🔍 View</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {% if protein_info %}
+    <div class="protein-grid" id="card-area">
+      {% for protein, domains in protein_info %}
+        <div class="card protein-card"
+             data-protein-id="{{ protein.id }}"
+             data-domains='[{% for d in domains %}{"s":{{ d.start }},"e":{{ d.end }},"n":"{{ d.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]'>
+          <div class="viewer"
+               id="viewer-{{ protein.id }}"
+               data-relpath="{{ protein.pdb_file_path }}">
+          </div>
+          <div class="info">
+            <h4>{{ protein.protein_id }}</h4>
+            <ul>
+              {% for d in domains %}
+                <li data-dom-idx="{{ forloop.counter0 }}"{% if d.wrong %} class="wrong-domain"{% endif %}>
+                    {% if d.wrong %}❌ {% endif %}{{ d.name }} ({{ d.start }}–{{ d.end }})
+                </li>
+              {% endfor %}
+            </ul>
+            <a href="{% url 'annotations_app:annotate_specific_protein' folder_id=folder.id protein_pk=protein.pk %}"
+               class="btn btn--secondary">Re-annotate</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="pagination-global" id="pager">
+      <button id="prev-btn" disabled>&laquo; Prev</button>
+      <span class="page-info">
+          Page <span class="cur-page">1</span> of <span class="total-pages">1</span>
+      </span>
+      <button id="next-btn" disabled>Next &raquo;</button>
+    </div>
   {% else %}
-    <p style="text-align:center; font-size: 1.1rem; color: #6c757d;">No proteins have been annotated yet.</p>
+    <p style="text-align:center;font-size:1.1rem;color:#6c757d">
+       No proteins have been annotated yet.</p>
   {% endif %}
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", ()=>{
+
+  /* ---------- config ------------------------------------------------- */
+  const DESKTOP = 16, MOBILE = 8, BRK = 768;
+  const palette = ['#e74c3c','#3498db','#2ecc71','#f39c12',
+                   '#9b59b6','#1abc9c','#e67e22','#8e44ad',
+                   '#34495e','#f1c40f','#c0392b','#2980b9'];
+
+  const cards = Array.from(document.querySelectorAll(".protein-card"));
+  if(!cards.length) return;
+
+  const pager=document.getElementById("pager"),
+        prev=document.getElementById("prev-btn"),
+        next=document.getElementById("next-btn"),
+        cur =pager.querySelector(".cur-page"),
+        tot =pager.querySelector(".total-pages");
+
+  let perPage=innerWidth<BRK?MOBILE:DESKTOP, page=1,
+      pages=Math.ceil(cards.length/perPage);
+  tot.textContent=pages; pager.style.display=pages>1?"block":"none";
+
+  const stages=new Map();
+
+  const decode=u=>u.replace(/\\u([0-9a-fA-F]{4})/g,
+                       (_,h)=>String.fromCharCode(parseInt(h,16)));
+
+  function load(card){
+      const id=card.dataset.proteinId; if(stages.has(id)) return;
+      const rel=decode(card.querySelector(".viewer").dataset.relpath||"");
+      if(!rel){card.querySelector(".viewer").textContent="No PDB"; return;}
+
+      const domains=JSON.parse(card.dataset.domains||"[]");
+      const st=new NGL.Stage(card.querySelector(".viewer"),{backgroundColor:"white"});
+      st.loadFile("{{ media_url }}"+rel,{defaultRepresentation:false})
+        .then(c=>{
+            c.addRepresentation("cartoon",{color:"#cccccc",opacity:0.35});
+            domains.forEach((d,i)=>{
+                const col=palette[i%palette.length];
+                c.addRepresentation("cartoon",{sele:`${d.s}-${d.e}`,color:col});
+                const li=card.querySelector(`li[data-dom-idx="${i}"]`);
+                if(li) li.style.color=col;
+            });
+            c.autoView(200);st.setSpin(true);
+        })
+        .catch(e=>{console.error(e);card.querySelector(".viewer").textContent="Load err";});
+      stages.set(id,st);
+  }
+  function drop(card){const s=stages.get(card.dataset.proteinId);if(s){s.dispose();stages.delete(card.dataset.proteinId);} }
+
+  function render(){
+      const want=innerWidth<BRK?MOBILE:DESKTOP;
+      if(want!==perPage){perPage=want;pages=Math.ceil(cards.length/perPage);
+                         if(page>pages)page=pages;tot.textContent=pages;}
+      const start=(page-1)*perPage,end=start+perPage;
+      cards.forEach((c,i)=>{if(i>=start&&i<end){c.style.display="block";load(c);}
+                            else{c.style.display="none";drop(c);} });
+      cur.textContent=page; prev.disabled=page===1; next.disabled=page===pages;
+      pager.style.display=pages>1?"block":"none";
+  }
+  prev.onclick=()=>{if(page>1){page--;render();}};
+  next.onclick=()=>{if(page<pages){page++;render();}};
+  let t;onresize=()=>{clearTimeout(t);t=setTimeout(render,200);};
+  render();
+});
+</script>
 {% endblock %}

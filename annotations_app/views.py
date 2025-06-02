@@ -761,91 +761,83 @@ def submit_standard_annotation(request):
 @login_required
 @require_POST
 def submit_domain_correction(request):
-    """Handles saving domain corrections marked as wrong from architecture.html."""
+    """
+    Save (or overwrite) the list of domains the user has marked as wrong
+    for *this protein*.  Any domains that were previously marked but are
+    no longer in `corrections` are deleted.
+    """
     try:
-        data = json.loads(request.body)
-        protein_pk = data.get("protein_pk")
-        folder_id = data.get("folder_id")
-        corrections = data.get("corrections") # Expect list of {name, start, end}
-        user = request.user
+        data        = json.loads(request.body)
+        protein_pk  = data.get("protein_pk")
+        folder_id   = data.get("folder_id")
+        corrections = data.get("corrections")        # list[{name,start,end}]
+        user        = request.user
 
-        if not protein_pk or not isinstance(corrections, list) or folder_id is None:
-            return JsonResponse({"error": "Missing data (protein_pk, folder_id, corrections list)"}, status=400)
+        if not protein_pk or folder_id is None or not isinstance(corrections, list):
+            return JsonResponse(
+                {"error": "Missing or invalid data (protein_pk, folder_id, corrections)"},
+                status=400
+            )
 
-        # --- Get Protein ---
+        # ------------------------------------------------------------------
+        # Look-up objects
+        # ------------------------------------------------------------------
         try:
             protein = Protein.objects.get(pk=protein_pk, folder_id=folder_id)
         except Protein.DoesNotExist:
-            return JsonResponse({"error": "Protein not found in the specified folder"}, status=404)
+            return JsonResponse({"error": "Protein not found in folder"}, status=404)
 
-        # --- Save Corrections and Mark as Reviewed ---
-        saved_count = 0
-        errors = []
+        # ------------------------------------------------------------------
+        # Replace the old set atomically
+        # ------------------------------------------------------------------
         with transaction.atomic():
-            # 1. Delete previous corrections for this user/protein (start fresh)
-            # DomainCorrection.objects.filter(user=user, protein=protein).delete()
-            # Or upsert if you want to track unmarking later
+            # 1) drop everything that exists for this user+protein
+            DomainCorrection.objects.filter(user=user, protein=protein).delete()
 
-            # 2. Create new corrections based on submitted list
-            for correction_data in corrections:
-                domain_name = correction_data.get('name')
-                start_pos = correction_data.get('start')
-                end_pos = correction_data.get('end')
-
-                if not all([domain_name, isinstance(start_pos, int), isinstance(end_pos, int)]):
-                    errors.append(f"Invalid data format for correction: {correction_data}")
-                    continue
-
+            # 2) create fresh rows (if any)
+            new_objs = []
+            for corr in corrections:
                 try:
-                    # Use update_or_create to handle potential re-submissions
-                    DomainCorrection.objects.update_or_create(
+                    new_objs.append(DomainCorrection(
                         protein=protein,
                         user=user,
-                        domain_name=domain_name,
-                        start_pos=start_pos,
-                        end_pos=end_pos,
-                        defaults={'is_marked_wrong': True} # Ensure it's marked
-                    )
-                    saved_count += 1
-                except Exception as e:
-                    logger.error(f"Error saving domain correction for {domain_name} ({start_pos}-{end_pos}): {e}", exc_info=True)
-                    errors.append(f"Server error saving correction for '{domain_name}'.")
+                        domain_name=corr["name"],
+                        start_pos=int(corr["start"]),
+                        end_pos=int(corr["end"]),
+                        is_marked_wrong=True
+                    ))
+                except (KeyError, ValueError, TypeError):
+                    # skip malformed rows silently
+                    continue
+            DomainCorrection.objects.bulk_create(new_objs)
 
-            # 3. Create/Update the standard Annotation record to mark as reviewed
-            # We use 'correct' as a placeholder meaning "processed/reviewed"
-            if not errors: # Only mark as reviewed if corrections saved without error
-                 annotation, created = Annotation.objects.update_or_create(
-                     protein=protein,
-                     user=user,
-                     defaults={
-                         "folder": protein.folder,
-                         "annotation_title": protein.folder.title,
-                         "given_annotation": 'correct', # Mark as reviewed
-                         "timestamp": timezone.now()
-                     }
-                 )
-            else:
-                 # If errors occurred saving corrections, do NOT mark as reviewed
-                 # The transaction will roll back the correction saves anyway
-                 logger.warning(f"Skipping marking protein {protein_pk} as reviewed due to domain correction errors.")
-                 # Raise an exception to ensure transaction rollback if not already happening
-                 raise IntegrityError("Failed to save domain corrections.")
+            # 3) mark the protein as “reviewed” in the standard Annotation
+            Annotation.objects.update_or_create(
+                protein=protein,
+                user=user,
+                defaults={
+                    "folder": protein.folder,
+                    "annotation_title": protein.folder.title,
+                    "given_annotation": "correct",
+                    "timestamp": timezone.now()
+                }
+            )
 
-
-        # If we reach here without errors, transaction committed
         return JsonResponse({
             "success": True,
-            "message": f"Saved {saved_count} domain corrections. Protein marked as reviewed."
+            "saved": len(new_objs),
+            "message": (
+                "Corrections updated."
+                if new_objs else
+                "No domains are marked wrong any more."
+            )
         })
 
     except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON data"}, status=400)
-    except IntegrityError as e: # Catch the explicit raise from the transaction block
-        return JsonResponse({"error": f"Failed to save corrections: {str(e)}", "details": errors}, status=400)
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
-        logger.error(f"Domain Correction submission failed unexpectedly: {e}", exc_info=True)
-        return JsonResponse({"error": f"An unexpected server error occurred: {str(e)}"}, status=500)
-
+        logger.error("Domain-correction save failed: %s", e, exc_info=True)
+        return JsonResponse({"error": f"Server error: {e}"}, status=500)
 
 # ... (keep download_annotations_csv, undo_standard_annotation, annotation_overview, redo_folder_view)
 
@@ -888,13 +880,18 @@ def undo_standard_annotation(request):
 
 
 @login_required
+@login_required
 def architecture_annotation_overview(request, folder_id):
+    """
+    Show every protein that *has a standard annotation* together with
+    • all domains parsed from its CSV (the “annotated domains”)
+    • the subset the user marked as wrong
+    """
     folder = get_object_or_404(ProteinFolder, id=folder_id)
 
+    # -------- resolve user to display ----------------------------------
     user_id = request.GET.get("user")
     User = get_user_model()
-
-    # Resolve target user: either selected user or fallback to current
     if user_id:
         try:
             target_user = User.objects.get(id=user_id)
@@ -902,43 +899,60 @@ def architecture_annotation_overview(request, folder_id):
             messages.error(request, "User not found.")
             return redirect("annotations_app:view_folders")
     else:
-        target_user = request.user  # Default to current user
+        target_user = request.user
 
-    # Fetch annotations and corrections for the selected user
-    annotated_proteins = Annotation.objects.filter(
-        folder=folder,
-        user=target_user
-    ).select_related('protein')
+    # -------- fetch data ------------------------------------------------
+    ann_qs = Annotation.objects.filter(folder=folder, user=target_user) \
+                               .select_related("protein")
 
-    corrections = DomainCorrection.objects.filter(
+    corr_qs = DomainCorrection.objects.filter(
         user=target_user,
-        protein__folder=folder
-    ).select_related('protein')
+        protein__folder=folder,
+        is_marked_wrong=True
+    ).select_related("protein")
 
-    # Group corrections by protein
-    from collections import defaultdict
-    protein_to_corrections = defaultdict(list)
-    for c in corrections:
-        protein_to_corrections[c.protein].append(c)
+    # group corrections by protein for quick lookup
+    wrong_by_protein = defaultdict(list)
+    for c in corr_qs:
+        wrong_by_protein[c.protein].append(c)
 
-    # Merge annotations + corrections for display
-    protein_correction_list = [
-        (ann.protein, protein_to_corrections.get(ann.protein, []))
-        for ann in annotated_proteins
-    ]
-    protein_correction_list.sort(key=lambda pair: pair[0].protein_id)
+    # -------- build per-protein payload --------------------------------
+    protein_info = []
+    for ann in ann_qs:
+        protein = ann.protein
 
-    # Make sure current user is in the dropdown list too
+        # 1. parse CSV → predicted / annotated domains
+        domains, _err = parse_domain_csv(protein)
+        domains = domains or []                     # empty list on error
+
+        # 2. tag those that are marked wrong
+        wrong_set = {
+            (w.domain_name, w.start_pos, w.end_pos)
+            for w in wrong_by_protein.get(protein, [])
+        }
+
+        tagged = []
+        for d in domains:
+            tagged.append({
+                "name":  d["name"],
+                "start": d["start"],
+                "end":   d["end"],
+                "wrong": (d["name"], d["start"], d["end"]) in wrong_set
+            })
+
+        protein_info.append((protein, tagged))
+
+    protein_info.sort(key=lambda pair: pair[0].protein_id)
+
     users = User.objects.all()
 
-    return render(request, 'annotations_app/architecture_overview.html', {
-        'folder': folder,
-        'protein_to_domains': protein_correction_list,
-        'media_url': settings.MEDIA_URL,
-        'target_user': target_user,
-        'users': users,  # Includes current user
+    return render(request, "annotations_app/architecture_overview.html", {
+        "folder": folder,
+        "protein_info": protein_info,   # ← NEW payload
+        "media_url": settings.MEDIA_URL,
+        "target_user": target_user,
+        "users": users,
     })
-
 
 
 @login_required
