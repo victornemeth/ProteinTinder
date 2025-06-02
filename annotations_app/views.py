@@ -1142,9 +1142,10 @@ def manual_annotate_folder_view(request, folder_id, protein_pk=None):
         # protein = get_object_or_404(proteins_qs, pk=protein_pk)
         protein = get_object_or_404(Protein, pk=protein_pk, folder=folder)
     else:                                             # next un-annotated
-        done_ids = Annotation.objects.filter(
-            user=user, folder=folder
-        ).values_list('protein_id', flat=True)
+        done_ids = ManualDomainAnnotation.objects.filter(
+              user=user,
+              protein__folder=folder
+          ).values_list("protein_id", flat=True)
         protein = proteins_qs.exclude(pk__in=done_ids).first()
 
         if not protein:
