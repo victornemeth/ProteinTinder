@@ -125,7 +125,8 @@
     <div class="action-buttons">
       <button id="addDomainBtn" title="Add a default domain at the end">Add Default Domain</button>
       <button id="saveBtn">Save Annotations</button>
-      <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}"
+      <!-- <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" -->
+      <a href="{{ next_protein_url }}"
          id="nextBtn" class="button secondary">Skip & Go Next</a>
       <button id="deleteDomainBtn" disabled
               title="Click a domain on the bar to enable delete">Delete Selected</button>
@@ -143,8 +144,10 @@ let domainData = [];                      // Will be populated dynamically
 const pdbUrl       = "{{ pdb_url|escapejs|default:'' }}";
 const proteinPk    = {{ protein.pk|default:'null' }};
 const folderId     = {{ folder.id|default:'null' }};
-const saveUrl      = "{% url 'annotations_app:submit_domain_correction' %}";
-const nextProteinUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
+// const saveUrl      = "{% url 'annotations_app:submit_domain_correction' %}";
+const saveUrl      = "{% url 'annotations_app:submit_manual_domains' %}";
+// const nextProteinUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
+const nextProteinUrl = "{{ next_protein_url|escapejs }}";
 
 let stage, currentStructureComponent = null, isSpinning = true;
 const spinSpeed = 0.01, spinAxis = [0,1,0];

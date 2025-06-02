@@ -43,5 +43,24 @@ urlpatterns = [
     path('manual/annotate/', views.manual_annotate_protein_view, name='manual_annotate_protein'),
     path('annotate/submit_manual_domains/', views.submit_manual_domains, name='submit_manual_domains'),
 
-
+    path(
+        'folder/<int:folder_id>/manual_annotate/',
+        views.manual_annotate_folder_view,
+        name='manual_annotate_folder'
+    ),
+    path(
+        'folder/<int:folder_id>/manual_annotate/<int:protein_pk>/',
+        views.manual_annotate_folder_view,
+        name='manual_annotate_specific'
+    ),
+    path(
+        "folder/<int:folder_id>/domain-overview/",
+        views.domain_annotation_overview,
+        name="domain_annotation_overview",
+    ),
+    path(
+        "folder/<int:folder_id>/domain-annotations.zip",
+        views.domain_annotation_download,
+        name="domain_annotation_download",
+    ),
 ]

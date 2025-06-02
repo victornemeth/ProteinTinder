@@ -140,6 +140,9 @@
              color: #6c757d;
              font-style: italic;
         }
+              .switch-btn       {float:right;margin-left:10px;font-size:.9em;
+                         background:#e9ecef;color:#495057;padding:6px 10px;
+                         border-radius:4px;text-decoration:none}
 
         /* Simple Media Query for Grid Columns on larger screens */
         @media (min-width: 768px) {
@@ -169,8 +172,11 @@
 {% endblock %}
 {% block content %}
 <body>
+
     <div class="container">
         <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Back to Folder List</a>
+            <a href="{% url 'annotations_app:domain_annotation_overview' folder.id %}"
+   class="switch-btn">↔ Domain overview</a>
         <h2>Annotation Overview for: {{ folder.name }}</h2>
 
         <div style="margin-bottom: 15px;">

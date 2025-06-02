@@ -254,21 +254,28 @@
                          </span>
                     </span>
                     <span class="folder-actions">
+                        {# — Manual domain workflow only makes sense for “Structure-only” folders — #}
+                        {% if not entry.is_architecture %}
+                            <a class="action-link"
+                                href="{% url 'annotations_app:manual_annotate_folder' folder_id=entry.folder.id %}">
+                                ✏️Domains
+                            </a>
+                        {% endif %}                        
                         {% if entry.is_architecture %}
-                          <a class="action-link" href="{% url 'annotations_app:architecture_annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                          <a class="action-link" href="{% url 'annotations_app:architecture_annotation_overview' folder_id=entry.folder.id %}">👀Recap</a>
                         {% else %}
-                          <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">View Overview</a>
+                          <a class="action-link" href="{% url 'annotations_app:annotation_overview' folder_id=entry.folder.id %}">👀Recap</a>
                         {% endif %}
 
                         {% if entry.is_architecture %}
                           <a class="action-link" href="{% url 'annotations_app:download_domain_corrections_csv' folder_id=entry.folder.id %}">
-                            💾 TSV
+                            💾TSV
                           </a>
                         {% else %}
-                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">💾 TSV</a>
+                        <a class="action-link" href="{% url 'annotations_app:download_annotations_csv' folder_id=entry.folder.id %}">💾TSV</a>
                         {% endif %}
                         <a class="action-link" href="{% url 'annotations_app:download_folder_zip' folder_id=entry.folder.id %}">
-    📦 PDBs
+    📦PDBs
 </a>
 
                         {% if user == entry.folder.user %}
@@ -276,7 +283,7 @@
       style="display:inline;"
       onsubmit="return confirm('Are you sure you want to delete the folder \'{{ entry.folder.name }}\'? This action cannot be undone.');">
     {% csrf_token %}
-    <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Delete</button>
+    <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Del</button>
 </form>
 
                         {% endif %}

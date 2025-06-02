@@ -1,0 +1,175 @@
+{# templates/annotations_app/domain_overview.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Domain overview – {{ folder.name }}{% endblock %}
+
+{% block head %}
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+      .container        {max-width:1100px;margin:auto;background:#fff;padding:20px;
+                         border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+      h2                {margin-bottom:15px;font-size:1.6em}
+      .switch-btn       {float:right;margin-left:10px;font-size:.9em;
+                         background:#e9ecef;color:#495057;padding:6px 10px;
+                         border-radius:4px;text-decoration:none}
+      .switch-btn:hover {background:#dee2e6}
+      /* .protein-grid     {display:grid;grid-gap:15px;
+                         grid-template-columns:repeat(auto-fill,minmax(180px,1fr));} */
+      .protein-grid     {display:grid;grid-gap:20px;                /* a little more space */
+                         grid-template-columns:repeat(auto-fill,    /* wider columns   */
+                                                    minmax(260px,1fr));}                         
+      .card             {border:1px solid #dee2e6;border-radius:6px;background:#fff;
+                         box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden}
+
+      /* .viewer           {height:140px;background:#f0f0f0;display:flex;
+                         align-items:center;justify-content:center;font-size:.8em;color:#6c757d} */
+      .viewer           {height:220px;background:#f0f0f0;position:relative;}
+/* 3-D preview */
+/* .viewer           {height:140px;background:#f0f0f0;position:relative;} */
+.viewer.loading   {display:flex;align-items:center;justify-content:center;
+                   font-size:.8em;color:#6c757d;}
+.viewer canvas    {position:absolute;top:0;left:0;width:10}
+                         
+      .info             {padding:10px;text-align:center}
+      /* .info h4          {margin:0 0 6px 0;font-size:.95em;word-break:break-all} */
+      .info ul          {list-style:none;padding:0;margin:0 0 6px 0;font-size:.8em}
+      /* .info li          {margin:2px 0}
+      .action-link      {font-size:.8em;color:#007bff;text-decoration:none}
+      .action-link:hover{text-decoration:underline} */
+
+      .info h4          {margin:0 0 6px 0;font-size:.95em;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      /* idem for domain rows */
+      .info li          {margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+     /* reusable button component */
+     .btn              {display:inline-block;font-size:.8em;padding:6px 12px;
+                        border-radius:4px;background:#0d6efd;color:#fff;
+                        text-decoration:none;transition:background .15s,box-shadow .15s}
+     .btn:hover        {background:#0b5ed7;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+     .btn--secondary   {background:#6c757d}
+     .btn--secondary:hover{background:#5c636a}
+  </style>
+
+  <!-- Swap 3Dmol for NGL -->
+  <script src="https://cdn.jsdelivr.net/npm/ngl@2.0.0-dev.39/dist/ngl.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+
+  <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Folder list</a>
+  <a href="{% url 'annotations_app:annotation_overview' folder.id %}"
+     class="switch-btn">↔ Swipe overview</a>
+
+  {# CSV export for this folder – adjust the url-name to match your views.py #}
+  <a href="{% url 'annotations_app:domain_annotation_download' folder.id %}"
+   class="btn" style="margin-left:10px">⬇ Download CSV</a>
+
+
+  <h2>Domain overview: {{ folder.name }}</h2>
+
+  <div style="margin-bottom:15px">
+      <label>👁 Annotated by:</label>
+      <select onchange="if(this.value)location.href=this.value;">
+        {% for u in users %}
+          <option value="{% url 'annotations_app:domain_annotation_overview' folder.id %}?user={{u.id}}"
+                  {% if target_user.id == u.id %}selected{% endif %}>{{u.username}}</option>
+        {% endfor %}
+      </select>
+  </div>
+
+  {% if protein_to_domains %}
+    <div class="protein-grid">
+      {% for protein, domains in protein_to_domains %}
+        <div class="card">
+          <div class="viewer" id="viewer-{{protein.id}}"></div>
+          <div class="info">
+            <h4>{{protein.protein_id}}</h4>
+            <ul>
+            {% for d in domains %}
+              <li data-dom-idx="{{ forloop.counter0 }}">
+                  {{ d.domain_name }} ({{ d.start_pos }}–{{ d.end_pos }})
+              </li>
+            {% endfor %}
+            </ul>
+            <!-- <a href="{% url 'annotations_app:manual_annotate_specific'
+                           folder.id protein.pk %}"
+               class="action-link">Re-annotate</a> -->
+             <a href="{% url 'annotations_app:manual_annotate_specific'
+                           folder.id protein.pk %}"
+               class="btn btn--secondary">Re-annotate</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p><em>No manual domain annotations yet.</em></p>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  /* --- simple repeating palette (12 colours) -------------------- */
+  const palette = [
+    '#e74c3c','#3498db','#2ecc71','#f39c12',
+    '#9b59b6','#1abc9c','#e67e22','#8e44ad',
+    '#34495e','#f1c40f','#c0392b','#2980b9'
+  ];
+
+  {% for protein, domains in protein_to_domains %}
+    (function () {
+      const viewerDiv = document.getElementById("viewer-{{ protein.id }}");
+      const relPath   = "{{ protein.pdb_file_path|escapejs }}";
+
+      if (!viewerDiv || !relPath) { viewerDiv.textContent = "No PDB"; return; }
+
+      /* ----  set up NGL stage in the small card ----------------- */
+      const stage = new NGL.Stage(viewerDiv, { backgroundColor: "white" });
+      window.addEventListener("resize", () => stage.handleResize());
+
+      const pdbUrl = "{{ media_url }}" + relPath;
+      const ext    = pdbUrl.split(".").pop().toLowerCase();
+
+      stage.loadFile(pdbUrl, { defaultRepresentation:false, ext }).then(comp => {
+
+        /* light grey ‘whole protein’ backbone */
+        comp.addRepresentation("cartoon",
+            { sele:"polymer",  color:"#cccccc", opacity:0.35 });
+
+        /* ---- individual domains -------------------------------- */
+        const domains = [
+          {% for d in domains %}
+            { name:"{{ d.domain_name|escapejs }}",
+              start:{{ d.start_pos }}, end:{{ d.end_pos }} },
+          {% endfor %}
+        ];
+
+        domains.forEach((dom, i) => {
+          const colour = palette[i % palette.length];
+
+          /* colour the 3-D fragment */
+          comp.addRepresentation("cartoon", {
+            sele  : `${dom.start}-${dom.end}`,
+            color : colour
+          });
+
+          /* tint the matching <li> element */
+          const li = viewerDiv.parentElement
+                     .querySelector(`li[data-dom-idx="${i}"]`);
+          if (li) li.style.color = colour;
+        });
+
+        comp.autoView(200);
+        stage.setSpin(true);
+      }).catch(err => {
+        console.error(err);
+        viewerDiv.textContent = "Load error";
+      });
+    })();
+  {% endfor %}
+});
+</script>
+
+{% endblock %}
