@@ -1014,3 +1014,89 @@ def delete_folder(request, folder_id):
         messages.error(request, "An error occurred while deleting the folder.")
 
     return redirect('annotations_app:view_folders')
+
+# --- Additional View for Saving Manual Domain Annotations ---
+from .models import ManualDomainAnnotation  # Add this model to store manual domains (create if missing)
+
+@login_required
+@require_POST
+def submit_manual_domains(request):
+    try:
+        data = json.loads(request.body)
+        protein_pk = data.get("protein_pk")
+        folder_id = data.get("folder_id")
+        domains = data.get("manual_domains")  # [{name, start, end}, ...]
+        user = request.user
+
+        if not (protein_pk and folder_id and isinstance(domains, list)):
+            return JsonResponse({"error": "Missing required data."}, status=400)
+
+        protein = get_object_or_404(Protein, pk=protein_pk, folder_id=folder_id)
+
+        # Delete existing manual annotations by this user
+        ManualDomainAnnotation.objects.filter(protein=protein, user=user).delete()
+
+        # Save new domain data
+        new_objs = [
+            ManualDomainAnnotation(
+                protein=protein,
+                user=user,
+                domain_name=d["name"],
+                start_pos=int(d["start"]),
+                end_pos=int(d["end"])
+            )
+            for d in domains if all(k in d for k in ("name", "start", "end"))
+        ]
+        ManualDomainAnnotation.objects.bulk_create(new_objs)
+
+        # Mark protein as annotated
+        Annotation.objects.update_or_create(
+            protein=protein,
+            user=user,
+            defaults={
+                "folder": protein.folder,
+                "annotation_title": protein.folder.title,
+                "given_annotation": "correct",
+                "timestamp": timezone.now()
+            }
+        )
+
+        return JsonResponse({"success": True, "message": f"Saved {len(new_objs)} domain annotations."})
+
+    except Exception as e:
+        logger.error(f"Manual domain annotation failed: {e}", exc_info=True)
+        return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
+
+
+
+@login_required
+@ensure_csrf_cookie
+def manual_annotate_protein_view(request):
+    user = request.user
+    proteins = Protein.objects.filter(domain_csv_path__isnull=True)
+
+    if not proteins.exists():
+        messages.warning(request, "No proteins without domain CSVs available for manual annotation.")
+        return redirect('annotations_app:view_folders')
+
+    annotated_ids = Annotation.objects.filter(user=user).values_list("protein_id", flat=True)
+    protein = proteins.exclude(pk__in=annotated_ids).order_by('?').first()
+
+    if not protein:
+        messages.info(request, "You have manually annotated all available proteins.")
+        return redirect('annotations_app:view_folders')
+
+    context = {
+        'protein': protein,
+        'media_url': settings.MEDIA_URL,
+        'annotation_title': "Manual Annotation",
+        'annotation_description': "Define your own domain splits.",
+        'folder': protein.folder,
+        'folder_id': protein.folder.id,
+        'pdb_url': default_storage.url(protein.pdb_file_path) if protein.pdb_file_path else None,
+        'domain_data': [],  # start with empty domain list
+        'marked_wrong_data': [],
+        'csv_error': None,
+    }
+
+    return render(request, 'annotations_app/manual_domain_annotator.html', context)

@@ -40,5 +40,8 @@ urlpatterns = [
     path('delete-folder/<int:folder_id>/', views.delete_folder, name='delete_folder'),
     path('download_folder_zip/<int:folder_id>/', views.download_pdb_folder_zip, name='download_folder_zip'),
 
+    path('manual/annotate/', views.manual_annotate_protein_view, name='manual_annotate_protein'),
+    path('annotate/submit_manual_domains/', views.submit_manual_domains, name='submit_manual_domains'),
+
 
 ]
