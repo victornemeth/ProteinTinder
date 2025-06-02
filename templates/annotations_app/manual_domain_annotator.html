@@ -439,6 +439,18 @@ function deselectDomain(){
 /* ------------------------------------------------------------------
    EDGE DRAG  (resize a single domain)
 ------------------------------------------------------------------ */
+
+
+function getImmediateNeighbours(cur) {
+  const sorted = [...domainData].sort((a, b) => a.start - b.start);
+  const i = sorted.indexOf(cur);
+  return {
+    prev: i > 0 ? sorted[i - 1] : null,
+    next: i < sorted.length - 1 ? sorted[i + 1] : null
+  };
+}
+
+
 function initiateEdgeDrag(ev, idx, side){
   if (isDraggingToCreate) return;
   isDraggingEdge = true;
@@ -461,10 +473,17 @@ function initiateEdgeDrag(ev, idx, side){
     /* Bounds */
     newStart = Math.max(1,newStart);
     newEnd   = Math.min(proteinLength,newEnd);
-    if (side==='start' && idx>0)
-        newStart = Math.max(newStart, (domainData[idx-1].end||0)+1);
-    if (side==='end' && idx<domainData.length-1)
-        newEnd = Math.min(newEnd, (domainData[idx+1].start||proteinLength+1)-1);
+    // if (side==='start' && idx>0)
+    //     newStart = Math.max(newStart, (domainData[idx-1].end||0)+1);
+    // if (side==='end' && idx<domainData.length-1)
+    //     newEnd = Math.min(newEnd, (domainData[idx+1].start||proteinLength+1)-1);
+
+
+    const { prev, next } = getImmediateNeighbours(d);
+    if (side === 'start' && prev)
+        newStart = Math.max(newStart, prev.end + 1);
+    if (side === 'end' && next)
+        newEnd   = Math.min(newEnd, next.start - 1);
 
     const minLen = 5;
     if (newEnd - newStart + 1 < minLen){
