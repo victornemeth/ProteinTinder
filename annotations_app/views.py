@@ -1379,6 +1379,10 @@ def domain_annotation_download(request, folder_id):
                     parser    = PDB.PDBParser(QUIET=True)
                     structure = parser.get_structure("model", pdb_abs)
 
+                    # we know how many domains upfront → choose a width that keeps
+                    # alphabetical = numerical order (e.g. 01, 02 … 10)
+                    num_digits = max(2, len(str(len(domains))))
+
                     for idx, d in enumerate(domains, 1):
                         start, end = d.start_pos, d.end_pos
                         if start > end:
@@ -1386,25 +1390,25 @@ def domain_annotation_download(request, folder_id):
 
                         class RangeSelect(Select):
                             def accept_residue(self, residue, s=start, e=end):
-                                # residue.id -> (' ', resseq, insertion)
-                                res_no = residue.id[1]
-                                return s <= res_no <= e
+                                return s <= residue.id[1] <= e
 
-                        pdb_io = PDBIO()
+                        pdb_io  = PDBIO()
                         pdb_io.set_structure(structure)
-                        domain_buf = io.StringIO()
-                        pdb_io.save(domain_buf, RangeSelect())
+                        buf = io.StringIO()
+                        pdb_io.save(buf, RangeSelect())
 
+                        domain_slug = slugify(d.domain_name) or f"domain{idx}"
+                        idx_str     = str(idx).zfill(num_digits)          # e.g. 01
                         fname = (
                             f"pdbs/{protein.protein_id}/"
-                            f"domain_{idx}_"
-                            f"{slugify(d.domain_name) or idx}.pdb"
+                            f"{protein.protein_id}_{idx_str}_{domain_slug}.pdb"
                         )
-                        zf.writestr(fname, domain_buf.getvalue())
+                        zf.writestr(fname, buf.getvalue())
 
                 except Exception as e:
                     logger.warning("Domain-PDB split failed for %s: %s",
-                                   protein.protein_id, e)
+                                protein.protein_id, e)
+
 
         if not wrote_any:
             raise Http404("No domain annotations found in this folder.")
