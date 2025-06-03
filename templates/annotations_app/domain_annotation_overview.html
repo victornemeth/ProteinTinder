@@ -152,37 +152,58 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ========= NGL VIEWER CACHE ========================================= */
   const viewers = new Map();   // protein-id ➔ NGL.Stage
 
-  function addViewer(card){
-      const protId = card.dataset.proteinId;
-      if (viewers.has(protId)) return;
+function addViewer(card){
+    const protId = card.dataset.proteinId;
+    if (viewers.has(protId)) return;
 
-      const div      = card.querySelector(".viewer");
-      const relPath  = div.dataset.relpath;
-      if (!relPath){ div.textContent = "No PDB"; return; }
+    const div     = card.querySelector(".viewer");
+    const relPath = div.dataset.relpath;
+    if (!relPath){ div.textContent = "No PDB"; return; }
 
-      /* parse domain list stored as data-attribute */
-      const domains = JSON.parse(card.dataset.domains || "[]");
+    const domains = JSON.parse(card.dataset.domains || "[]");
 
-      const stage = new NGL.Stage(div,{backgroundColor:"white"});
-      stage.loadFile("{{ media_url }}" + relPath,{defaultRepresentation:false})
-           .then(comp => {
-               comp.addRepresentation("cartoon",{color:"#cccccc",opacity:0.35});
+    const stage = new NGL.Stage(div, { backgroundColor: "black" });
 
-               domains.forEach((dom,i) => {
-                   const colour = palette[i % palette.length];
-                   comp.addRepresentation("cartoon",{
-                       sele:`${dom.s}-${dom.e}`,color:colour});
-                   const li = card.querySelector(`li[data-dom-idx="${i}"]`);
-                   if (li) li.style.color = colour;
-               });
+    // Disable fog and set visual parameters clearly
+    stage.setParameters({
+      fog: false,
+      fogNear: 100,
+      fogFar: 100,
+      lightIntensity: 1.2
+    });
 
-               comp.autoView(200);
-               stage.setSpin(true);
-           })
-           .catch(err=>{console.error(err);div.textContent="Load err";});
+    stage.loadFile("{{ media_url }}" + relPath, { defaultRepresentation: false })
+        .then(comp => {
+            // Show full polymer in soft gray
+            comp.addRepresentation("cartoon", {
+                sele: "polymer",
+                color: "lightgray",
+                name: "background"
+            });
 
-      viewers.set(protId,stage);
-  }
+            // Overlay colored domains
+            domains.forEach((dom, i) => {
+                const colour = palette[i % palette.length];
+                comp.addRepresentation("cartoon", {
+                    sele: `${dom.s}-${dom.e}`,
+                    color: colour,
+                    name: `domain-${i}`
+                });
+                const li = card.querySelector(`li[data-dom-idx="${i}"]`);
+                if (li) li.style.color = colour;
+            });
+
+            comp.autoView(200);
+            stage.setSpin(true);
+        })
+        .catch(err => {
+            console.error(err);
+            div.textContent = "Load err";
+        });
+
+    viewers.set(protId, stage);
+}
+
 
   function removeViewer(card){
       const protId = card.dataset.proteinId;
