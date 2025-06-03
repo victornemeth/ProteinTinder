@@ -129,7 +129,7 @@
     </div>
 
     <div class="controls">
-      <button id="toggleSpinBtn">Pause Rotation</button>
+      <button id="toggleSpinBtn">Start Rotation</button>
       <label for="styleSelect">Style:</label>
       <select id="styleSelect">
         <option value="cartoon" selected>Cartoon</option>
@@ -197,7 +197,7 @@ const saveUrl      = "{% url 'annotations_app:submit_manual_domains' %}";
 // const nextProteinUrl = "{% url 'annotations_app:annotate_protein' folder_id=folder.id %}";
 const nextProteinUrl = "{{ next_protein_url|escapejs }}";
 
-let stage, currentStructureComponent = null, isSpinning = true;
+let stage, currentStructureComponent = null, isSpinning = false;
 const spinSpeed = 0.01, spinAxis = [0,1,0];
 let proteinLength = 0;
 let selectedDomainIndex = -1;
@@ -267,10 +267,15 @@ function updateStatus(msg, type='info'){
 ------------------------------------------------------------------ */
 async function initViewer(){
   try{
-    stage = new NGL.Stage(ui.viewport,{backgroundColor:'white'});
+    stage = new NGL.Stage(ui.viewport,{backgroundColor:'black'});
     ui.viewportInitMsg.style.display='none';
-    stage.setParameters({clipNear:.1,clipFar:1e4,fog:false,
-                         lightIntensity:1.2,ambientIntensity:.5});
+        // Disable fog and set visual parameters clearly
+    stage.setParameters({
+      fog: false,
+      fogNear: 100,
+      fogFar: 100,
+      lightIntensity: 1.2
+    });
     window.addEventListener('resize',() => stage.handleResize());
 
     if (pdbUrl && pdbUrl.trim()){
