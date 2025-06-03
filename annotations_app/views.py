@@ -7,6 +7,7 @@ import tempfile
 import logging
 import io # Required for reading CSV from storage
 from io import BytesIO
+from datetime import datetime
 
 from django.db import IntegrityError, transaction # Import transaction
 from django.conf import settings
@@ -1409,8 +1410,20 @@ def domain_annotation_download(request, folder_id):
             raise Http404("No domain annotations found in this folder.")
 
     zip_buffer.seek(0)
-    response = HttpResponse(zip_buffer.read(), content_type="application/zip")
+    # response = HttpResponse(zip_buffer.read(), content_type="application/zip")
+    # response["Content-Disposition"] = (
+    #     f'attachment; filename=\"domain_annotations_{folder.id}.zip\"'
+    # )
+    response = HttpResponse(zip_buffer.getvalue(),
+                            content_type="application/zip")
+    
+    # Cache-busting headers
+    response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response["Pragma"]        = "no-cache"
+    response["Expires"]       = "0"
+    
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     response["Content-Disposition"] = (
-        f'attachment; filename=\"domain_annotations_{folder.id}.zip\"'
+        f'attachment; filename="domain_annotations_{folder.id}_{stamp}.zip"'
     )
     return response
