@@ -33,6 +33,8 @@ from collections import defaultdict
 from django.utils.encoding import smart_str  # To ensure UTF-8 strings
 from django.contrib.auth import get_user_model
 
+from .utils import extract_pdb_sequence
+
 logger = logging.getLogger(__name__)
 
 
@@ -1121,30 +1123,50 @@ def manual_annotate_protein_view(request):
     proteins = Protein.objects.filter(domain_csv_path__isnull=True)
 
     if not proteins.exists():
-        messages.warning(request, "No proteins without domain CSVs available for manual annotation.")
+        messages.warning(request,
+                         "No proteins without domain CSVs available for manual annotation.")
         return redirect('annotations_app:view_folders')
 
-    annotated_ids = Annotation.objects.filter(user=user).values_list("protein_id", flat=True)
+    annotated_ids = Annotation.objects.filter(user=user)\
+                                      .values_list("protein_id", flat=True)
     protein = proteins.exclude(pk__in=annotated_ids).order_by('?').first()
 
     if not protein:
-        messages.info(request, "You have manually annotated all available proteins.")
+        messages.info(request,
+                      "You have manually annotated all available proteins.")
         return redirect('annotations_app:view_folders')
 
+ # ── NEW: primary-sequence extraction ────────────────────────────────
+    sequence = ""
+    try:
+        if protein.pdb_file_path:
+            sequence = extract_pdb_sequence(
+                default_storage.path(protein.pdb_file_path)
+            )
+    except Exception as e:
+        logger.warning("Cannot extract sequence for %s: %s",
+                       protein.protein_id, e)
+    # ── page payload ────────────────────────────────────────────────────
     context = {
-        'protein': protein,
-        'media_url': settings.MEDIA_URL,
-        'annotation_title': "Manual Annotation",
-        'annotation_description': "Define your own domain splits.",
-        'folder': protein.folder,
-        'folder_id': protein.folder.id,
-        'pdb_url': default_storage.url(protein.pdb_file_path) if protein.pdb_file_path else None,
-        'domain_data': [],  # start with empty domain list
-        'marked_wrong_data': [],
-        'csv_error': None,
+        "protein"           : protein,
+        "folder"            : folder,
+        "folder_id"         : folder.id,
+        "annotation_title"  : folder.title or "Manual Annotation",
+        "annotation_description": folder.description,
+        "media_url"         : settings.MEDIA_URL,
+        "pdb_url"           : (default_storage.url(protein.pdb_file_path)
+                               if protein.pdb_file_path else None),
+        "domain_data"       : domain_data,
+        "marked_wrong_data" : [],
+        "csv_error"         : None,
+        "next_protein_url"  : reverse('annotations_app:manual_annotate_folder',
+                                      args=[folder.id]),
+        "sequence"          : sequence,          # 🔹  pass it to template
     }
 
-    return render(request, 'annotations_app/manual_domain_annotator.html', context)
+    return render(request,
+                  "annotations_app/manual_domain_annotator.html",
+                  context)
 
 @login_required
 @ensure_csrf_cookie
@@ -1193,23 +1215,37 @@ def manual_annotate_folder_view(request, folder_id, protein_pk=None):
         for d in existing
     ]
 
+# ── NEW: primary-sequence extraction ────────────────────────────────
+    sequence = ""
+    try:
+        if protein.pdb_file_path:
+            sequence = extract_pdb_sequence(
+                default_storage.path(protein.pdb_file_path)
+            )
+    except Exception as e:
+        logger.warning("Cannot extract sequence for %s: %s",
+                       protein.protein_id, e)
+
+    # ── page payload ────────────────────────────────────────────────────
     context = {
-        'protein'           : protein,
-        'folder'            : folder,
-        'folder_id'         : folder.id,
-        'annotation_title'  : folder.title or "Manual Annotation",
-        'annotation_description': folder.description,
-        'media_url'         : settings.MEDIA_URL,
-        'pdb_url'           : (default_storage.url(protein.pdb_file_path)
+        "protein"           : protein,
+        "folder"            : folder,
+        "folder_id"         : folder.id,
+        "annotation_title"  : folder.title or "Manual Annotation",
+        "annotation_description": folder.description,
+        "media_url"         : settings.MEDIA_URL,
+        "pdb_url"           : (default_storage.url(protein.pdb_file_path)
                                if protein.pdb_file_path else None),
-        'domain_data'       : domain_data,
-        'marked_wrong_data' : [],
-        'csv_error'         : None,
-        'next_protein_url'  : reverse('annotations_app:manual_annotate_folder',
+        "domain_data"       : domain_data,
+        "marked_wrong_data" : [],
+        "csv_error"         : None,
+        "next_protein_url"  : reverse('annotations_app:manual_annotate_folder',
                                       args=[folder.id]),
+        "sequence"          : sequence,          # 🔹  pass it to template
     }
+
     return render(request,
-                  'annotations_app/manual_domain_annotator.html',
+                  "annotations_app/manual_domain_annotator.html",
                   context)
 
 
@@ -1258,46 +1294,85 @@ def domain_annotation_overview(request, folder_id):
         },
     )
 
+# views.py
 @login_required
 def domain_annotation_download(request, folder_id):
     """
-    Stream a ZIP containing one CSV per protein in the folder.
-    CSV header: Domain Number, Start Residue, End Residue, Predicted Domain
-    Data source: Protein.manual_domain_annotations
+    Stream a ZIP containing
+      • one CSV per protein with the manual domain table
+      • one FASTA per protein (fastas/{protein}.fasta) with all
+        individual domain sequences
+
+    FASTA header format:
+        >{protein_id}|{domain_name}|{start}-{end}
     """
+    from itertools import zip_longest
+    from textwrap import wrap
+    from .utils import extract_pdb_sequence           # ← make sure it’s imported
+
     folder = get_object_or_404(ProteinFolder, pk=folder_id)
 
-    # build the ZIP in memory
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
         proteins = (
-            Protein.objects.filter(folder=folder)
-            .prefetch_related("manual_domain_annotations")  # ← correct related_name
+            Protein.objects
+            .filter(folder=folder)
+            .prefetch_related("manual_domain_annotations")
             .order_by("protein_id")
         )
 
-        any_written = False
-        for protein in proteins:
-            domains = protein.manual_domain_annotations.all().order_by("start_pos")
-            if not domains.exists():
-                continue          # skip proteins with no annotations
+        wrote_anything = False
 
-            any_written = True
-            csv_io = io.StringIO()
-            writer = csv.writer(csv_io)
+        for protein in proteins:
+            domains = list(
+                protein.manual_domain_annotations.all().order_by("start_pos")
+            )
+            if not domains:
+                continue                               # nothing to export
+
+            wrote_anything = True
+
+            # ----------  1) write the CSV  ----------
+            csv_io  = io.StringIO()
+            writer  = csv.writer(csv_io)
             writer.writerow(
                 ["Domain Number", "Start Residue", "End Residue", "Predicted Domain"]
             )
-            for idx, d in enumerate(domains, start=1):
+            for idx, d in enumerate(domains, 1):
                 writer.writerow([idx, d.start_pos, d.end_pos, d.domain_name])
-
             zf.writestr(f"{protein.protein_id}.csv", csv_io.getvalue())
 
-        if not any_written:
+            # ----------  2) build the FASTA  ----------
+            seq_full = ""
+            try:
+                if protein.pdb_file_path:
+                    abs_path = default_storage.path(protein.pdb_file_path)
+                    seq_full = extract_pdb_sequence(abs_path)
+            except Exception as e:
+                # keep going – CSV is still valuable
+                logger.warning("FASTA export failed for %s: %s",
+                               protein.protein_id, e)
+
+            if seq_full:
+                fasta_lines = []
+                for d in domains:
+                    # bounds check – skip if outside or weird
+                    if d.start_pos < 1 or d.end_pos > len(seq_full) or d.start_pos > d.end_pos:
+                        continue
+                    subseq = seq_full[d.start_pos - 1 : d.end_pos]
+                    header = f">{protein.protein_id}|{d.domain_name}|{d.start_pos}-{d.end_pos}"
+                    # wrap sequence at 60 aa per line (FASTA convention)
+                    wrapped = "\n".join(wrap(subseq, 60))
+                    fasta_lines.append(f"{header}\n{wrapped}")
+
+                if fasta_lines:           # only write if we produced at least one record
+                    fasta_content = "\n".join(fasta_lines) + "\n"
+                    zf.writestr(f"fastas/{protein.protein_id}.fasta", fasta_content)
+
+        if not wrote_anything:
             raise Http404("No domain annotations found in this folder.")
 
-    # return the file
     zip_buffer.seek(0)
     response = HttpResponse(zip_buffer.read(), content_type="application/zip")
     response["Content-Disposition"] = (

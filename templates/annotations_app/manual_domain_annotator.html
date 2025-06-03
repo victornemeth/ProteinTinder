@@ -77,6 +77,35 @@
 
     /* Utility */
     .disabled-link{pointer-events:none;opacity:.6;}
+
+
+    /*  ----------  SEQUENCE BAR  ---------- */
+#seq-bar-container{
+  position:relative; width:100%; height:22px;     /* same height as ticks */
+  font-family:monospace; font-size:.70rem; line-height:1;
+  user-select:none; pointer-events:none;          /* purely visual */
+}
+#seq-bar-container .aa{
+  position:absolute; top:0; transform:translateX(-50%);
+  white-space:pre;
+}
+
+#seq-zoom-container{
+    margin-top:30px;
+    font:14px/1.2 monospace;
+
+    /* let text wrap and grow vertically */
+    white-space:pre-wrap;       /* honour \n in the text   */
+    word-break:break-word;      /* fall-back if no \n      */
+
+    max-height:140px;           /* 10 lines of 14 px – adjust or remove */
+    overflow-y:auto;            /* scroll only when really necessary    */
+    /* border:1px solid #ddd;      purely cosmetic */
+    /* padding:4px 6px; */
+}
+
+#seq-zoom-bar{white-space:inherit}
+
   </style>
 
 <div class="architecture-view">
@@ -117,10 +146,19 @@
     </div>
 
     <div id="domain-bar-container">
+      <!-- <div id="seq-bar-container">
+        <div id="seq-bar"></div>
+      </div> -->
+
       <div id="tick-container"></div>
       <div id="domain-bar">
         <div id="temp-drag-segment"></div>
       </div>
+      <div id="seq-zoom-container" style="display:none;">
+        Domain selection:
+  <div id="seq-zoom-bar"></div>
+</div>
+
     </div>
 
     <div class="action-buttons">
@@ -191,6 +229,11 @@ const colours = [
   '#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c',
   '#e67e22','#8e44ad','#34495e','#f1c40f','#c0392b','#2980b9'
 ];
+
+/* --- sequence straight from Django -------------------------------- */
+const sequenceStr   = "{{ sequence|default:''|escapejs }}";
+if (sequenceStr.length) proteinLength = sequenceStr.length;
+
 let domainColourMap = Object.create(null);   // name → colour  (stable)
 
 /* Keep existing colours; only assign new ones. */
@@ -443,7 +486,9 @@ function selectDomain(i){
   selectedDomainIndex = i;
   renderDomainVisuals();
   applyNGLRepresentations();
+  renderZoomBar(currentDomain());          // <-- zoom update
 }
+
 function deselectDomain(){
   selectedDomainIndex = -1;
   renderDomainVisuals();
@@ -753,6 +798,65 @@ fetch("{% url 'annotations_app:undo_manual_domain' %}", {
 
   });
 }
+
+function renderSequenceBar(){
+  if (!sequenceStr.length) return;
+  const bar = document.getElementById('seq-bar');
+  bar.innerHTML = '';                               // wipe
+  /* Render every residue or – if very long – every N-th so it
+     never gets denser than ~600 letters across the screen.       */
+  const step = Math.ceil(sequenceStr.length / 600);
+  for (let i = 0; i < sequenceStr.length; i += step){
+    const span = document.createElement('span');
+    span.className  = 'aa';
+    span.textContent = sequenceStr[i];
+    span.style.left = `${(i / (sequenceStr.length - 1)) * 100}%`;
+    bar.appendChild(span);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  /* … your existing DOMContentLoaded code … */
+  renderSequenceBar();        // <-- NEW
+});
+
+function renderZoomBar(domain){
+  /* domain: {start, end} in 1-based coordinates */
+  const zoomWrap = document.getElementById("seq-zoom-container");
+  const zoomBar  = document.getElementById("seq-zoom-bar");
+
+  if (!domain || !sequenceStr.length){
+    zoomWrap.style.display = "none";
+    zoomBar.textContent    = "";
+    return;
+  }
+  /* slice is 0-based & end-exclusive */
+  const frag = sequenceStr.slice(domain.start - 1, domain.end);
+  zoomBar.textContent = frag;
+  zoomWrap.style.display = "block";
+}
+
+function currentDomain(){
+  return (selectedDomainIndex > -1) ? domainData[selectedDomainIndex] : null;
+}
+/* ---------------------------------------------------------------
+   KEYBOARD SHORTCUT: Delete or Backspace removes the selection
+---------------------------------------------------------------- */
+document.addEventListener('keydown', (ev) => {
+
+  /* 1. Only act when a domain is currently selected */
+  if (selectedDomainIndex === -1) return;
+
+  /* 2. Respect text editing inside the small name input fields     */
+  const tag = (document.activeElement || {}).tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  /* 3. Trigger on Delete (and optionally Backspace) */
+  if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      ev.preventDefault();            // stop accidental “back-navigate”
+      ui.deleteDomainBtn.click();     // reuse existing handler
+  }
+});
 
 </script>
 {% endblock %}
