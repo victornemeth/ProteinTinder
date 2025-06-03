@@ -27,6 +27,7 @@ Interactively annotate protein domains directly in the browser:
 💾 Export zip:
 - **CSV**: One file per protein (see format below)
 - **FASTA**: Each domain as a separate sequence entry
+- **PDB**: Each domain as a separate PDB file
 
 
 **Example `.csv` format**:
