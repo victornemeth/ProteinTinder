@@ -1,74 +1,84 @@
-# Annotate App
+# 🧬 Annotate App
 
-A mobile-friendly and web-based app for visualizing and annotating 3D protein structures using [3Dmol.js](https://3dmol.csb.pitt.edu/) and [NGL.js](https://www.npmjs.com/package/ngl).
+A **mobile-friendly**, **web-based** platform for visualizing and annotating 3D protein structures using [3Dmol.js](https://3dmol.csb.pitt.edu/) and [NGL.js](https://www.npmjs.com/package/ngl). Built with Django, this app supports protein annotation through intuitive gestures and interactive tools.
 
-## Three use-cases
+---
 
-### Swipe annotations
-Users can annotate protein models with intuitive swipe gestures:
+## 🚀 Use Cases
 
-- 👉 Swipe **right** — mark as **Correct**
-- 👈 Swipe **left** — mark as **Wrong**
-- 👇 Swipe **down** — mark as **Unsure**
+### 1. **Swipe Annotations**  
+Quickly classify protein models with swipe gestures:
 
-Annotations are saved to a MySQL database and can be exported to csv from within the webapp.
+- 👉 **Swipe right** — Mark as **Correct**  
+- 👈 **Swipe left** — Mark as **Wrong**  
+- 👇 **Swipe down** — Mark as **Unsure**
 
-### Domain annotation
-Users can also annotate domains on the uploaded pdb files and export them to csv or fasta (per domain entry):
+Annotations are saved to a MySQL database and can be exported as CSV from the web interface.
 
-- Drag across the domain bar to create new domains
-- Name the domains using the textbox below the domain
-- Expand or crop your domain by dragging at the borders
+---
 
-Annotated domains can be exported from the overview page with the download button:
-- CSV per protein, format see Example `.csv` format below
-- FASTA per protein, containing all domains as a seperate entry in the fasta file
+### 2. **Domain Annotation**  
+Interactively annotate protein domains directly in the browser:
 
-### Domain correction
-Users can also upload their protein structures together with the CSV files that contain their annotated domains:
-- Select the wrong domains
+- 🎯 Drag across the domain bar to define regions  
+- 🏷️ Name domains using the text field below  
+- 🖱️ Adjust domain boundaries by dragging
 
-How to use:
+💾 Export zip:
+- **CSV**: One file per protein (see format below)
+- **FASTA**: Each domain as a separate sequence entry
 
-- Check the box **"Include architecture data (CSV files)?"** during upload.
-- The uploaded `.zip` file must include both `.pdb` and `.csv` files.
-- Each `.csv` file should share the same name as its corresponding `.pdb` file (i.e., `protein_id.csv` and `protein_id.pdb`).
 
-#### Example `.csv` format:
-
+**Example `.csv` format**:
 ```csv
 Domain Number,Start Residue,End Residue,Predicted Domain
 1,1,181,XD2
 2,182,294,XD3
 ```
 
-## Stuff I need to Add
+### 3. **Domain Correction**  
+Refine previously annotated domains by uploading `.pdb` and `.csv` files together:
 
-- If you have suggestions please let me know!
-- Deploying the website with Debug=False, nginx config.
+- ✅ Mark incorrect domain entries  
+- 📦 Upload `.zip` archives containing both `.pdb` and `.csv` files  
+- ☑️ Enable **"Include architecture data?"** during upload
 
-## Use
+📁 Each `.csv` must match its `.pdb` filename (e.g., `protein_id.pdb` and `protein_id.csv`).
 
-- Make a account
-- Upload your folder of pdbs as a zip file and add a annotation title (e.g. Correctly Folded?) and description
-- The name of the pdb file is also its protein_id
+---
 
-## Features
+## 🧪 How to Use
 
-- 🧬 Interactive 3D protein viewer
-- 📱 Touch and mouse swipe support
-- 🧮 Overview page to see proteins grouped by annotation.
-- 🔐 User authentication (login/signup)
-- 💾 Annotations can be exported as csv.
+1. 📝 Create an account  
+2. 📤 Upload a `.zip` containing your `.pdb` files  
+3. ✏️ Add an annotation title and description  
+4. ⚙️ Annotate proteins using swipe or domain modes  
+5. 📥 Export your annotations as `.csv` or `.fasta`
 
-## Tech Stack
+> 📌 Note: The filename of each `.pdb` serves as its `protein_id`.
 
-- Python / Django
-- MySQL
-- HTML / JS / 3Dmol.js
-- Docker
+---
 
-## Run Locally
+## ✨ Features
+
+- 🧬 Interactive 3D protein viewer  
+- 📱 Mobile touch and desktop mouse support  
+- 📊 Overview dashboard for grouped annotations  
+- 🔐 User login and registration  
+- 💾 Annotation export (CSV/FASTA)
+
+---
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python, Django  
+- **Database**: MySQL  
+- **Frontend**: HTML, JavaScript, 3Dmol.js, NGL.js  
+- **Deployment**: Docker
+
+---
+
+## ⚙️ Run Locally
 
 ```bash
 git clone https://github.com/victornemeth/ProteinTinder.git
