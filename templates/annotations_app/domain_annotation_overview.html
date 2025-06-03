@@ -61,8 +61,12 @@
 
   <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Folder list</a>
   <a href="{% url 'annotations_app:annotation_overview' folder.id %}" class="switch-btn">↔ Swipe overview</a>
-  <a href="{% url 'annotations_app:domain_annotation_download' folder.id %}" class="btn" style="margin-left:10px">⬇ Download</a>
-
+  <!-- <a href="{% url 'annotations_app:domain_annotation_download' folder.id %}" class="btn" style="margin-left:10px">⬇ Download</a> -->
+  <a id="download-btn"
+    href="{% url 'annotations_app:domain_annotation_download' folder.id %}"
+    class="btn" style="margin-left:10px">
+    ⬇ Download
+  </a>
   <h2>Domain overview: {{ folder.name }}</h2>
 
   <div style="margin-bottom:15px">
@@ -232,5 +236,19 @@ document.addEventListener("DOMContentLoaded", () => {
   /* first paint */
   render();
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+  const dl = document.getElementById("download-btn");
+  if (!dl) return;
+
+  dl.addEventListener("click", ev => {
+    ev.preventDefault();                              // stop the default jump
+    const url = new URL(dl.href, window.location);    // make a mutable copy
+    url.searchParams.set("ts", Date.now());           // ts=1717421234567
+    window.location.href = url;                       // start the download
+  });
+});
+
+
 </script>
 {% endblock %}
