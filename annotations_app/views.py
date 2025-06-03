@@ -1295,20 +1295,20 @@ def domain_annotation_overview(request, folder_id):
     )
 
 # views.py
+# views.py
 @login_required
 def domain_annotation_download(request, folder_id):
     """
-    Stream a ZIP containing
-      • one CSV per protein with the manual domain table
-      • one FASTA per protein (fastas/{protein}.fasta) with all
-        individual domain sequences
-
-    FASTA header format:
-        >{protein_id}|{domain_name}|{start}-{end}
+    ZIP export with:
+      • {protein}.csv               manual-domain table
+      • fastas/{protein}.fasta      1 FASTA record / domain
+      • pdbs/{protein}/domain_*.pdb individual PDBs per domain
     """
-    from itertools import zip_longest
     from textwrap import wrap
-    from .utils import extract_pdb_sequence           # ← make sure it’s imported
+    from django.utils.text import slugify
+    from Bio import PDB
+    from Bio.PDB import PDBIO, Select
+    from .utils import extract_pdb_sequence
 
     folder = get_object_or_404(ProteinFolder, pk=folder_id)
 
@@ -1316,26 +1316,25 @@ def domain_annotation_download(request, folder_id):
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
         proteins = (
-            Protein.objects
-            .filter(folder=folder)
+            Protein.objects.filter(folder=folder)
             .prefetch_related("manual_domain_annotations")
             .order_by("protein_id")
         )
 
-        wrote_anything = False
+        wrote_any = False
 
         for protein in proteins:
             domains = list(
                 protein.manual_domain_annotations.all().order_by("start_pos")
             )
             if not domains:
-                continue                               # nothing to export
+                continue
 
-            wrote_anything = True
+            wrote_any = True
 
-            # ----------  1) write the CSV  ----------
-            csv_io  = io.StringIO()
-            writer  = csv.writer(csv_io)
+            # ---------- CSV ----------
+            csv_io = io.StringIO()
+            writer = csv.writer(csv_io)
             writer.writerow(
                 ["Domain Number", "Start Residue", "End Residue", "Predicted Domain"]
             )
@@ -1343,39 +1342,75 @@ def domain_annotation_download(request, folder_id):
                 writer.writerow([idx, d.start_pos, d.end_pos, d.domain_name])
             zf.writestr(f"{protein.protein_id}.csv", csv_io.getvalue())
 
-            # ----------  2) build the FASTA  ----------
+            # ---------- full sequence ----------
             seq_full = ""
+            pdb_abs  = None
             try:
                 if protein.pdb_file_path:
-                    abs_path = default_storage.path(protein.pdb_file_path)
-                    seq_full = extract_pdb_sequence(abs_path)
+                    pdb_abs = default_storage.path(protein.pdb_file_path)
+                    seq_full = extract_pdb_sequence(pdb_abs)
             except Exception as e:
-                # keep going – CSV is still valuable
-                logger.warning("FASTA export failed for %s: %s",
+                logger.warning("Sequence/PDB parse failed for %s: %s",
                                protein.protein_id, e)
 
+            # ---------- FASTA ----------
             if seq_full:
                 fasta_lines = []
                 for d in domains:
-                    # bounds check – skip if outside or weird
-                    if d.start_pos < 1 or d.end_pos > len(seq_full) or d.start_pos > d.end_pos:
+                    if not (1 <= d.start_pos <= d.end_pos <= len(seq_full)):
                         continue
-                    subseq = seq_full[d.start_pos - 1 : d.end_pos]
-                    header = f">{protein.protein_id}|{d.domain_name}|{d.start_pos}-{d.end_pos}"
-                    # wrap sequence at 60 aa per line (FASTA convention)
-                    wrapped = "\n".join(wrap(subseq, 60))
-                    fasta_lines.append(f"{header}\n{wrapped}")
+                    frag = seq_full[d.start_pos-1 : d.end_pos]
+                    header = (
+                        f">{protein.protein_id}|{d.domain_name}"
+                        f"|{d.start_pos}-{d.end_pos}"
+                    )
+                    fasta_lines.append(header + "\n" +
+                                       "\n".join(wrap(frag, 60)))
+                if fasta_lines:
+                    zf.writestr(
+                        f"fastas/{protein.protein_id}.fasta",
+                        "\n".join(fasta_lines) + "\n"
+                    )
 
-                if fasta_lines:           # only write if we produced at least one record
-                    fasta_content = "\n".join(fasta_lines) + "\n"
-                    zf.writestr(f"fastas/{protein.protein_id}.fasta", fasta_content)
+            # ---------- per-domain PDBs ----------
+            if pdb_abs and os.path.exists(pdb_abs):
+                try:
+                    parser    = PDB.PDBParser(QUIET=True)
+                    structure = parser.get_structure("model", pdb_abs)
 
-        if not wrote_anything:
+                    for idx, d in enumerate(domains, 1):
+                        start, end = d.start_pos, d.end_pos
+                        if start > end:
+                            continue
+
+                        class RangeSelect(Select):
+                            def accept_residue(self, residue, s=start, e=end):
+                                # residue.id -> (' ', resseq, insertion)
+                                res_no = residue.id[1]
+                                return s <= res_no <= e
+
+                        pdb_io = PDBIO()
+                        pdb_io.set_structure(structure)
+                        domain_buf = io.StringIO()
+                        pdb_io.save(domain_buf, RangeSelect())
+
+                        fname = (
+                            f"pdbs/{protein.protein_id}/"
+                            f"domain_{idx}_"
+                            f"{slugify(d.domain_name) or idx}.pdb"
+                        )
+                        zf.writestr(fname, domain_buf.getvalue())
+
+                except Exception as e:
+                    logger.warning("Domain-PDB split failed for %s: %s",
+                                   protein.protein_id, e)
+
+        if not wrote_any:
             raise Http404("No domain annotations found in this folder.")
 
     zip_buffer.seek(0)
     response = HttpResponse(zip_buffer.read(), content_type="application/zip")
     response["Content-Disposition"] = (
-        f'attachment; filename="domain_annotations_{folder.id}.zip"'
+        f'attachment; filename=\"domain_annotations_{folder.id}.zip\"'
     )
     return response
