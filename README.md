@@ -81,8 +81,9 @@ Refine previously annotated domains by uploading `.pdb` and `.csv` files togethe
 
 ## 🛠️ To Do
 
-- Add skip button for domain annotation and domain correction
-
+- If you have any suggestions please let me know!
+- More robust nginx deployment
+- Expanding domain correction by able to easily modify borders, names, etc.
 ---
 
 ## ⚙️ Run Locally

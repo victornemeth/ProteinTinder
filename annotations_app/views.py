@@ -1001,57 +1001,80 @@ def architecture_annotation_overview(request, folder_id):
     })
 
 
+# annotations_app/views.py
 @login_required
 def download_domain_corrections_csv(request, folder_id):
+    """
+    Export one TSV line per (user, protein) in the folder.
+    • Status    – “No domains marked” or “n domain(s) marked”
+    • Marked…   – list of domain names
+    • Domain…   – list of residue ranges
+    """
     folder = get_object_or_404(ProteinFolder, id=folder_id)
-    user = request.user
 
-    # Get all annotated proteins
-    annotated_protein_ids = Annotation.objects.filter(
-        folder=folder,
-        user=user
-    ).values_list('protein_id', flat=True)
-
-    proteins = Protein.objects.filter(folder=folder, pk__in=annotated_protein_ids)
-    corrections = DomainCorrection.objects.filter(
-        user=user,
-        protein__in=proteins,
-        is_marked_wrong=True
-    ).select_related('protein')
-
+    # ------------------------------------------------------------
+    # 1)  fetch once, group in memory
+    # ------------------------------------------------------------
     from collections import defaultdict
-    protein_to_corrections = defaultdict(list)
-    for corr in corrections:
-        protein_to_corrections[corr.protein].append(corr)
+    corr_map = defaultdict(list)          # (user_id, protein_id) ➜ [DomainCorrection]
 
-    # --- TSV response ---
-    response = HttpResponse(content_type='text/tab-separated-values; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="architecture_overview_{folder.name}.tsv"'
+    for c in DomainCorrection.objects.filter(
+            protein__folder=folder,
+            is_marked_wrong=True
+        ).select_related("protein", "user"):
+        corr_map[(c.user_id, c.protein_id)].append(c)
 
-    writer = csv.writer(response, delimiter='\t')
-    writer.writerow(['User', 'Protein ID', 'Status', 'Marked Domains', 'Domain Ranges'])
+    # ------------------------------------------------------------
+    # 2)  we need at least the set of (user, protein) pairs.
+    #     The Annotation table is the easiest way to get that.
+    # ------------------------------------------------------------
+    annotations = (
+        Annotation.objects
+        .filter(folder=folder)
+        .select_related("protein", "user")
+        .order_by("user__username", "protein__protein_id")
+    )
 
-    for protein in sorted(proteins, key=lambda p: p.protein_id):
-        domain_list = protein_to_corrections.get(protein, [])
+    # ------------------------------------------------------------
+    # 3)  build the TSV
+    # ------------------------------------------------------------
+    response = HttpResponse(
+        content_type="text/tab-separated-values; charset=utf-8"
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="architecture_overview_{folder.name}.tsv"'
+    )
+
+    writer = csv.writer(response, delimiter="\t")
+    writer.writerow(
+        ["Username", "Protein ID", "Status", "Marked Domains", "Domain Ranges"]
+    )
+
+    for ann in annotations:
+        key         = (ann.user_id, ann.protein_id)
+        domain_list = corr_map.get(key, [])
 
         if domain_list:
-            status = f"{len(domain_list)} domain(s) marked"
-            domain_names = [smart_str(d.domain_name) for d in domain_list]
+            status        = f"{len(domain_list)} domain(s) marked"
+            domain_names  = [smart_str(d.domain_name) for d in domain_list]
             domain_ranges = [f"{d.start_pos}-{d.end_pos}" for d in domain_list]
         else:
-            status = "No domains marked"
-            domain_names = []
-            domain_ranges = []
+            status, domain_names, domain_ranges = (
+                "No domains marked", [], []
+            )
 
-        writer.writerow([
-            user.username,
-            protein.protein_id,
-            status,
-            str(domain_names),
-            str(domain_ranges)
-        ])
+        writer.writerow(
+            [
+                ann.user.username,
+                ann.protein.protein_id,
+                status,
+                str(domain_names),
+                str(domain_ranges),
+            ]
+        )
 
     return response
+
 
 
 @require_POST
