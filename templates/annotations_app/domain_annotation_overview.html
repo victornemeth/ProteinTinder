@@ -63,9 +63,9 @@
   <a href="{% url 'annotations_app:annotation_overview' folder.id %}" class="switch-btn">↔ Swipe overview</a>
   <!-- <a href="{% url 'annotations_app:domain_annotation_download' folder.id %}" class="btn" style="margin-left:10px">⬇ Download</a> -->
   <a id="download-btn"
-    href="{% url 'annotations_app:domain_annotation_download' folder.id %}"
-    class="btn" style="margin-left:10px">
-    ⬇ Download
+    href="{% url 'annotations_app:domain_annotation_download' folder.id %}?user={{ target_user.id }}"
+    class="btn">
+      ⬇ Download
   </a>
   <h2>Domain overview: {{ folder.name }}</h2>
 
