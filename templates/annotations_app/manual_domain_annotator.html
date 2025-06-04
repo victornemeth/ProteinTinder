@@ -173,6 +173,10 @@
 
     <div class="action-buttons">
       <button id="addDomainBtn" title="Add a default domain at the end">Add Default Domain</button>
+      <button id="skipBtn" class="button secondary" title="Come back later">
+        Skip
+      </button>
+
       <button id="saveBtn">Save Annotations</button>
       <!-- inside the .action-buttons block, just before Delete -->
 <button id="undoBtn" class="button secondary">↩️ Undo Last</button>
@@ -194,11 +198,20 @@
   </div>
 </div>
 
+
+<script id="initial-domain-data" type="application/json">
+  {{ domain_data_json|safe }}
+</script>
 <script>
+
+
 /* ------------------------------------------------------------------
    CONFIGURATION / GLOBAL STATE
 ------------------------------------------------------------------ */
-let domainData = [];                      // Will be populated dynamically
+// let domainData = [];                      // Will be populated dynamically
+let domainData = JSON.parse(
+      document.getElementById("initial-domain-data").textContent
+);
 const pdbUrl       = "{{ pdb_url|escapejs|default:'' }}";
 const proteinPk    = {{ protein.pk|default:'null' }};
 const folderId     = {{ folder.id|default:'null' }};
@@ -815,6 +828,28 @@ fetch("{% url 'annotations_app:undo_manual_domain' %}", {
 
   });
 }
+
+/* ----------  SKIP  ---------- */
+document.getElementById("skipBtn").addEventListener("click", () => {
+  fetch("{% url 'annotations_app:skip_manual_domain' %}", {
+      method : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken" : getCSRFCookie(),
+      },
+      body: JSON.stringify({
+        protein_pk: {{ protein.pk }},
+        folder_id : {{ folder.id }}
+      }),
+  })
+  .then(r => r.json())
+  .then(j => {
+      if (j.success)   window.location.href = j.redirect_url;
+      else             updateStatus(j.error || "Skip failed", "error");
+  })
+  .catch(e => updateStatus(e.message, "error"));
+});
+
 
 function renderSequenceBar(){
   if (!sequenceStr.length) return;

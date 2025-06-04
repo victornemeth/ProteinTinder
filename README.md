@@ -82,8 +82,6 @@ Refine previously annotated domains by uploading `.pdb` and `.csv` files togethe
 ## 🛠️ To Do
 
 - Add skip button for domain annotation and domain correction
-- When finished domain annotation get redirected do domain overview instead of swipe overview
-- Be able to review per protein domain annotations
 
 ---
 

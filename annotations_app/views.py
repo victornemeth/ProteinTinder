@@ -1190,21 +1190,35 @@ def manual_annotate_folder_view(request, folder_id, protein_pk=None):
                          "predicted domains – use the architecture flow instead.")
         return redirect('annotations_app:view_folders')
 
-    # ── decide which protein to show ─────────────────────────────────
-    if protein_pk:                                    # explicit redo
-        # protein = get_object_or_404(proteins_qs, pk=protein_pk)
+
+    skip_key    = f"manual_skipped_{folder.id}"
+    skipped     = request.session.get(skip_key, [])
+
+    if protein_pk:                                     # explicit redo
         protein = get_object_or_404(Protein, pk=protein_pk, folder=folder)
-    else:                                             # next un-annotated
+
+    else:                                              # next un-done
         done_ids = ManualDomainAnnotation.objects.filter(
-              user=user,
-              protein__folder=folder
-          ).values_list("protein_id", flat=True)
-        protein = proteins_qs.exclude(pk__in=done_ids).first()
+            user=user, protein__folder=folder
+        ).values_list("protein_id", flat=True)
+
+        protein = (
+            proteins_qs
+            .exclude(pk__in=done_ids)
+            .exclude(pk__in=skipped)        # ← NEW
+            .first()
+        )
+
+        # if everything fresh is finished, recycle skipped ones (FIFO)
+        if not protein and skipped:
+            protein = proteins_qs.filter(pk=skipped.pop(0)).first()
+            request.session[skip_key] = skipped
+            request.session.modified  = True
 
         if not protein:
             messages.info(request,
-                          f"You finished domain-annotating “{folder.name}”.")
-            return redirect('annotations_app:annotation_overview',
+                        f"You finished domain-annotating “{folder.name}”.")
+            return redirect('annotations_app:domain_annotation_overview',
                             folder_id=folder.id)
 
     # ── pre-fill any manual domains the user already saved ───────────
@@ -1243,6 +1257,8 @@ def manual_annotate_folder_view(request, folder_id, protein_pk=None):
         "next_protein_url"  : reverse('annotations_app:manual_annotate_folder',
                                       args=[folder.id]),
         "sequence"          : sequence,          # 🔹  pass it to template
+        "domain_data": domain_data,              # keep: still useful in Jinja
+        "domain_data_json": json.dumps(domain_data),   # <-- NEW
     }
 
     return render(request,
@@ -1431,3 +1447,46 @@ def domain_annotation_download(request, folder_id):
         f'attachment; filename="domain_annotations_{folder.id}_{stamp}.zip"'
     )
     return response
+
+# annotations_app/views.py  (place near the other POST helpers)
+@require_POST
+@login_required
+def skip_manual_domain(request):
+    """
+    Put the current protein on a “come-back-later” list that lives
+    in the user’s session (per-folder) and jump straight to the next
+    manual-domain job.
+    """
+    try:
+        data       = json.loads(request.body or "{}")
+        protein_pk = data.get("protein_pk")
+        folder_id  = data.get("folder_id")
+        if not (protein_pk and folder_id):
+            return JsonResponse({"error": "Missing data"}, status=400)
+
+        # ── sanity check ────────────────────────────────────────────────
+        Protein.objects.get(
+            pk=protein_pk,
+            folder_id=folder_id,
+            domain_csv_path__isnull=True        # manual-domain candidates only
+        )
+
+        key      = f"manual_skipped_{folder_id}"
+        skipped  = request.session.get(key, [])
+        if protein_pk not in skipped:
+            skipped.append(protein_pk)
+            request.session[key] = skipped      # persists until logout
+            request.session.modified = True
+
+        return JsonResponse({
+            "success"     : True,
+            "redirect_url": reverse(
+                "annotations_app:manual_annotate_folder",
+                args=[folder_id]                # → “next” protein
+            )
+        })
+    except Protein.DoesNotExist:
+        return JsonResponse({"error": "Protein not found"}, status=404)
+    except Exception as e:
+        logger.error("Skip-manual failed: %s", e, exc_info=True)
+        return JsonResponse({"error": str(e)}, status=500)
