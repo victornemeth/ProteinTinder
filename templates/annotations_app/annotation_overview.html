@@ -5,14 +5,13 @@
 
 {% block head %}
     <title>Annotation Overview: {{ folder.name }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Add viewport meta tag for responsiveness -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* Basic styling (keep existing) */
         .container {
             max-width: 1100px;
             margin: auto;
             background-color: #fff;
-            padding: 15px 20px; /* Adjust padding */
+            padding: 15px 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
@@ -20,11 +19,11 @@
             border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
             margin-bottom: 15px;
-            font-size: 1.6em; /* Slightly adjust */
+            font-size: 1.6em;
             color: #212529;
         }
-         p { line-height: 1.6; margin-bottom: 10px; }
-         p strong { font-weight: 600; }
+        p { line-height: 1.6; margin-bottom: 10px; }
+        p strong { font-weight: 600; }
 
         .annotation-group {
             margin-top: 25px;
@@ -32,27 +31,23 @@
         .annotation-group h3 {
             margin-bottom: 15px;
             color: #495057;
-            font-size: 1.3em; /* Adjust */
+            font-size: 1.3em;
             font-weight: 500;
         }
 
-        /* --- Grid Layout --- */
         .protein-grid {
             display: grid;
-            /* Responsive columns */
-            /* Mobile: Aim for 2 columns (for 8 cards) */
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Smaller min for mobile */
-            gap: 15px; /* Slightly smaller gap */
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
         }
 
-        /* --- Card Styling --- */
         .protein-card-item {
             border: 1px solid #dee2e6;
             border-radius: 6px;
             background-color: #fff;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
             overflow: hidden;
-            display: none; /* Initially hide ALL cards */
+            display: none;
             flex-direction: column;
             transition: box-shadow 0.2s ease-in-out;
         }
@@ -60,20 +55,83 @@
              box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
 
-        /* Adjust viewer height slightly */
-        .viewer-container { width: 100%; height: 120px; /* Adjust height */ background-color: #f0f0f0; position: relative; display: flex; align-items: center; justify-content: center; font-size: 0.8em; color: #6c757d; }
-        .viewer-container .load-error { color: #dc3545; font-weight: 500; padding: 5px; background-color: rgba(255, 255, 255, 0.8); border-radius: 3px; }
-        .card-info { padding: 10px; text-align: center; border-top: 1px solid #eee; background-color: #fdfdfd; }
-        .protein-id { display: block; font-size: 0.85em; font-weight: 500; color: #343a40; margin-bottom: 6px; word-break: break-all; }
-        .action-link { font-size: 0.8em; color: #007bff; text-decoration: none; padding: 4px 8px; border-radius: 4px; background-color: transparent; transition: background-color 0.2s ease; }
-        .action-link:hover { text-decoration: underline; background-color: #e7f3ff; }
-        .start-annotating-link { margin-top: 10px; display: inline-block; font-size: 1em; padding: 8px 15px; color: #fff; background-color: #007bff; border-radius: 5px; text-decoration: none; }
-         .start-annotating-link:hover { background-color: #0056b3; text-decoration: none; }
-        .back-link { margin-bottom: 15px; display: inline-block; color: #6c757d; text-decoration: none; font-size: 0.9em; }
-        .back-link:hover { text-decoration: underline; }
-        .empty-list-message { color: #6c757d; font-style: italic; padding: 15px 0; text-align: center; font-size: 0.95em; }
+        .viewer-container { 
+            width: 100%; 
+            height: 120px;
+            background-color: #f0f0f0; 
+            position: relative; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 0.8em; 
+            color: #6c757d; 
+        }
+        .viewer-container .load-error { 
+            color: #dc3545; 
+            font-weight: 500; 
+            padding: 5px; 
+            background-color: rgba(255, 255, 255, 0.8); 
+            border-radius: 3px; 
+        }
+        .card-info { 
+            padding: 10px; 
+            text-align: center; 
+            border-top: 1px solid #eee; 
+            background-color: #fdfdfd; 
+        }
+        .protein-id { 
+            display: block; 
+            font-size: 0.85em; 
+            font-weight: 500; 
+            color: #343a40; 
+            margin-bottom: 6px; 
+            word-break: break-all; 
+        }
+        .action-link { 
+            font-size: 0.8em; 
+            color: #007bff; 
+            text-decoration: none; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            background-color: transparent; 
+            transition: background-color 0.2s ease; 
+        }
+        .action-link:hover { 
+            text-decoration: underline; 
+            background-color: #e7f3ff; 
+        }
+        .start-annotating-link { 
+            margin-top: 10px; 
+            display: inline-block; 
+            font-size: 1em; 
+            padding: 8px 15px; 
+            color: #fff; 
+            background-color: #007bff; 
+            border-radius: 5px; 
+            text-decoration: none; 
+        }
+        .start-annotating-link:hover { 
+            background-color: #0056b3; 
+            text-decoration: none; 
+        }
+        .back-link { 
+            margin-bottom: 15px; 
+            display: inline-block; 
+            color: #6c757d; 
+            text-decoration: none; 
+            font-size: 0.9em; 
+        }
+        .back-link:hover { 
+            text-decoration: underline; 
+        }
+        .empty-list-message { 
+            color: #6c757d; 
+            font-style: italic; 
+            padding: 15px 0; 
+            text-align: center; 
+            font-size: 0.95em; 
+        }
 
-        /* --- Filter Controls Styling --- */
         .filter-controls {
             margin: 15px 0;
             padding-bottom: 15px;
@@ -84,11 +142,11 @@
             background-color: #e9ecef;
             color: #495057;
             border: 1px solid #ced4da;
-            padding: 6px 12px; /* Adjust padding */
+            padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
-            margin: 3px; /* Allow wrapping on mobile */
-            font-size: 0.85em; /* Adjust size */
+            margin: 3px;
+            font-size: 0.85em;
             transition: background-color 0.2s ease, border-color 0.2s ease;
         }
         .filter-controls button:hover {
@@ -102,23 +160,22 @@
             font-weight: 500;
         }
 
-        /* --- Global Pagination Controls Styling --- */
         .global-pagination-controls {
             text-align: center;
-            margin: 20px 0 10px 0; /* Adjust margin */
+            margin: 20px 0 10px 0;
             padding: 10px 0;
             font-size: 0.9em;
-            display: none; /* Hide initially */
+            display: none;
         }
         .global-pagination-controls button {
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 5px 10px; /* Adjust padding */
+            padding: 5px 10px;
             border-radius: 4px;
             cursor: pointer;
             margin: 0 5px;
-            font-size: 0.9em; /* Match text */
+            font-size: 0.9em;
             transition: background-color 0.2s ease;
         }
         .global-pagination-controls button:hover:not(:disabled) {
@@ -130,53 +187,52 @@
         }
         .global-pagination-controls .page-info {
             display: inline-block;
-            margin: 0 10px; /* Adjust margin */
+            margin: 0 10px;
             color: #495057;
         }
         #no-results-message {
-             display: none; /* Hidden initially */
+             display: none;
              text-align: center;
              margin-top: 20px;
              color: #6c757d;
              font-style: italic;
         }
-              .switch-btn       {float:right;margin-left:10px;font-size:.9em;
-                         background:#e9ecef;color:#495057;padding:6px 10px;
-                         border-radius:4px;text-decoration:none}
+        .switch-btn {
+            float:right;
+            margin-left:10px;
+            font-size:.9em;
+            background:#e9ecef;
+            color:#495057;
+            padding:6px 10px;
+            border-radius:4px;
+            text-decoration:none
+        }
 
-        /* Simple Media Query for Grid Columns on larger screens */
         @media (min-width: 768px) {
             .protein-grid {
-                /* Aim for 3 columns */
                  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
             }
-             .container { padding: 20px 30px;}
+            .container { padding: 20px 30px;}
         }
         @media (min-width: 992px) {
              .protein-grid {
-                 /* Aim for 4-5 columns depending on width (for 15 items) */
                  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
              }
         }
-         @media (min-width: 1200px) {
+        @media (min-width: 1200px) {
              .protein-grid {
-                 /* Aim for 5 columns */
                  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
              }
         }
-
     </style>
-    <!-- Include 3Dmol.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js" referrerpolicy="no-referrer"></script>
 </head>
 {% endblock %}
 {% block content %}
 <body>
-
     <div class="container">
         <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Back to Folder List</a>
-            <a href="{% url 'annotations_app:domain_annotation_overview' folder.id %}"
-   class="switch-btn">↔ Domain overview</a>
+        <a href="{% url 'annotations_app:domain_annotation_overview' folder.id %}" class="switch-btn">↔ Domain overview</a>
         <h2>Annotation Overview for: {{ folder.name }}</h2>
 
         <div style="margin-bottom: 15px;">
@@ -193,8 +249,7 @@
         <p><strong>Title:</strong> {{ folder.title }}</p>
         <p><strong>Description:</strong> {{ folder.description }}</p>
 
-        {% if annotations %} {# Only show filters/cards if there ARE annotations #}
-            <!-- Filter Controls -->
+        {% if annotations %}
             <div class="filter-controls">
                 <button data-filter="all" class="active">All</button>
                 <button data-filter="correct">Correct</button>
@@ -202,11 +257,8 @@
                 <button data-filter="unsure">Unsure</button>
             </div>
 
-            <!-- Card Area -->
             <div id="card-display-area">
-                {# Regroup the flat annotations list passed from the view #}
                 {% regroup annotations by given_annotation as grouped_annotations_list %}
-
                 {% for group in grouped_annotations_list %}
                     <div class="annotation-group" data-group-container="{{ group.grouper }}">
                         <h3>
@@ -217,7 +269,10 @@
                             <div class="protein-grid">
                                 {% for annotation in group.list %}
                                     {% with protein=annotation.protein %}
-                                    <div class="protein-card-item" data-group="{{ group.grouper }}">
+                                    <div class="protein-card-item" 
+                                         data-group="{{ group.grouper }}"
+                                         data-protein-id="{{ protein.id }}"
+                                         data-pdb-path="{{ protein.pdb_file_path }}">
                                         <div class="viewer-container" id="viewer-{{ protein.id }}">
                                             {% if protein.pdb_file_path %}Loading...{% else %}No Path{% endif %}
                                         </div>
@@ -228,27 +283,24 @@
                                     </div>
                                     {% endwith %}
                                 {% endfor %}
-                             </div> {# End protein-grid #}
+                            </div>
                         {% else %}
-                             <p class="empty-list-message">No proteins annotated as {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}.</p>
+                            <p class="empty-list-message">No proteins annotated as {% if group.grouper == 'correct' %}Correct{% elif group.grouper == 'wrong' %}Wrong{% else %}Unsure{% endif %}.</p>
                         {% endif %}
-                    </div> {# End annotation-group #}
+                    </div>
                 {% endfor %}
-            </div> {# End card-display-area #}
+            </div>
 
-            <!-- Message for No Results in Filter -->
-             <p id="no-results-message">No structures match the current filter.</p>
+            <p id="no-results-message">No structures match the current filter.</p>
 
-            <!-- Global Pagination Controls -->
             <div class="global-pagination-controls" id="pagination-global">
-                 <button id="global-prev-btn" disabled>Previous</button>
-                 <span class="page-info">
-                     Page <span class="current-page">1</span> of <span class="total-pages">1</span>
-                 </span>
-                 <button id="global-next-btn" disabled>Next</button>
-             </div>
-
-        {% else %} {# Handle case where there are NO annotations at all #}
+                <button id="global-prev-btn" disabled>Previous</button>
+                <span class="page-info">
+                    Page <span class="current-page">1</span> of <span class="total-pages">1</span>
+                </span>
+                <button id="global-next-btn" disabled>Next</button>
+            </div>
+        {% else %}
             <p class="empty-list-message" style="margin-top: 30px;">You haven't annotated any proteins in this folder yet.</p>
             <a href="{% url 'annotations_app:annotate_protein' folder_id=folder.id %}" class="action-link start-annotating-link">Start Annotating</a>
         {% endif %}
@@ -256,136 +308,155 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // --- Configuration ---
+            // Configuration
             const DESKTOP_CARDS_PER_PAGE = 15;
             const MOBILE_CARDS_PER_PAGE = 8;
-            const MOBILE_BREAKPOINT = 768; // Width in pixels
+            const MOBILE_BREAKPOINT = 768;
+            const MEDIA_URL = "{{ media_url }}";
 
-            // --- State Variables ---
-            let cardsPerPage = getCardsPerPage(); // Determine initial value
+            // State Variables
+            let cardsPerPage = getCardsPerPage();
             let currentPage = 1;
             let activeFilter = 'all';
             let allCards = [];
             let filteredCards = [];
+            const initializedViewers = new Set();
 
-            // --- DOM Element References ---
+            // DOM Elements
             const filterButtons = document.querySelectorAll('.filter-controls button');
             const paginationControls = document.getElementById('pagination-global');
             const prevButton = document.getElementById('global-prev-btn');
             const nextButton = document.getElementById('global-next-btn');
-            const currentPageSpan = paginationControls?.querySelector('.current-page'); // Use optional chaining
-            const totalPagesSpan = paginationControls?.querySelector('.total-pages'); // Use optional chaining
+            const currentPageSpan = paginationControls?.querySelector('.current-page');
+            const totalPagesSpan = paginationControls?.querySelector('.total-pages');
             const noResultsMessage = document.getElementById('no-results-message');
             const cardDisplayArea = document.getElementById('card-display-area');
 
-            // --- Helper Function ---
+            // Helper Functions
             function getCardsPerPage() {
                 return window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_CARDS_PER_PAGE : DESKTOP_CARDS_PER_PAGE;
             }
 
-            // --- Initialize 3Dmol Viewers (Early) ---
-            const viewers = {};
-            {% regroup annotations by given_annotation as grouped_annotations_list_script %}
-            {% for group in grouped_annotations_list_script %}
-                {% for annotation in group.list %}
-                    {% with protein=annotation.protein %}
-                    const viewerElement_{{ protein.id }} = document.getElementById('viewer-{{ protein.id }}');
-                    const pdbFilePath_{{ protein.id }} = "{{ protein.pdb_file_path|escapejs }}";
-
-                    if (viewerElement_{{ protein.id }} && pdbFilePath_{{ protein.id }}) {
-                        if (!viewers[{{ protein.id }}]) {
-                            try {
-                                const pdbPath_{{ protein.id }} = "{{ media_url }}" + pdbFilePath_{{ protein.id }};
-                                const filename_{{ protein.id }} = pdbFilePath_{{ protein.id }}.split('/').pop();
-                                const format_{{ protein.id }} = filename_{{ protein.id }}.split('.').pop().toLowerCase();
-                                const finalFormat_{{ protein.id }} = ['pdb', 'cif', 'sdf', 'mol2'].includes(format_{{ protein.id }}) ? format_{{ protein.id }} : 'pdb';
-
-                                viewers[{{ protein.id }}] = $3Dmol.createViewer(viewerElement_{{ protein.id }}, { backgroundColor: '#f0f0f0', antialias: true });
-
-                                $3Dmol.download(pdbPath_{{ protein.id }}, viewers[{{ protein.id }}], { format: finalFormat_{{ protein.id }} })
-                                    .then(function(){
-                                        viewers[{{ protein.id }}].setStyle({}, { cartoon: { color: 'spectrum' } });
-                                        viewers[{{ protein.id }}].zoomTo();
-                                        viewers[{{ protein.id }}].render();
-                                        viewers[{{ protein.id }}].zoom(1.2);
-                                        viewers[{{ protein.id }}].render();
-                                        viewers[{{ protein.id }}].spin(true); // Keep spin disabled
-                                    })
-                                    .catch(function(err){
-                                        viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">Load Err</span>';
-                                        console.error("Error loading PDB for card {{ protein.id }}:", err);
-                                    });
-                            } catch (e) {
-                                viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">View Err</span>';
-                                console.error("Error creating viewer for {{ protein.id }}:", e);
-                            }
-                        }
-                    } else if (viewerElement_{{ protein.id }} && !pdbFilePath_{{ protein.id }}) {
-                         viewerElement_{{ protein.id }}.innerHTML = '<span class="load-error">No Path</span>';
+            function initializeVisibleViewers() {
+                // Get currently visible cards
+                const visibleCards = Array.from(document.querySelectorAll('.protein-card-item'))
+                    .filter(card => window.getComputedStyle(card).display !== 'none');
+                
+                visibleCards.forEach(card => {
+                    const proteinId = card.dataset.proteinId;
+                    
+                    // Skip if already initialized
+                    if (initializedViewers.has(proteinId)) return;
+                    
+                    const pdbPath = card.dataset.pdbPath;
+                    const viewerElement = document.getElementById(`viewer-${proteinId}`);
+                    
+                    if (!viewerElement) return;
+                    
+                    // Handle missing PDB path
+                    if (!pdbPath || pdbPath === "undefined") {
+                        viewerElement.innerHTML = '<span class="load-error">No PDB Path</span>';
+                        initializedViewers.add(proteinId);
+                        return;
                     }
-                    {% endwith %}
-                {% endfor %}
-            {% endfor %}
 
-            // --- Gather All Card Elements ---
-            if (cardDisplayArea) {
-                 allCards = Array.from(cardDisplayArea.querySelectorAll('.protein-card-item'));
+                    try {
+                        const fullPath = MEDIA_URL + pdbPath;
+                        const filename = pdbPath.split('/').pop();
+                        const format = filename.split('.').pop().toLowerCase();
+                        const validFormats = ['pdb', 'cif', 'sdf', 'mol2'];
+                        const finalFormat = validFormats.includes(format) ? format : 'pdb';
+
+                        const viewer = $3Dmol.createViewer(viewerElement, {
+                            backgroundColor: '#f0f0f0',
+                            antialias: true
+                        });
+
+                        $3Dmol.download(fullPath, viewer, { format: finalFormat })
+                            .then(() => {
+                                viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                                viewer.zoomTo();
+                                viewer.render();
+                                viewer.zoom(1.2);
+                                viewer.render();
+                                viewer.spin(true);
+                                initializedViewers.add(proteinId);
+                            })
+                            .catch(err => {
+                                viewerElement.innerHTML = '<span class="load-error">Load Error</span>';
+                                console.error(`Error loading PDB for ${proteinId}:`, err);
+                                initializedViewers.add(proteinId);
+                            });
+                    } catch (e) {
+                        viewerElement.innerHTML = '<span class="load-error">Init Error</span>';
+                        console.error(`Error creating viewer for ${proteinId}:`, e);
+                        initializedViewers.add(proteinId);
+                    }
+                });
             }
 
-            // --- Main Update Function ---
+            function gatherCards() {
+                if (cardDisplayArea) {
+                    allCards = Array.from(cardDisplayArea.querySelectorAll('.protein-card-item'));
+                }
+            }
+
+            // Main Update Function
             function updateView() {
-                if (!cardDisplayArea || !paginationControls) return; // Exit if essential elements missing
+                if (!cardDisplayArea || !paginationControls) return;
+                
+                // Re-check cards per page in case of resize
+                cardsPerPage = getCardsPerPage();
 
-                // Re-check cards per page in case of resize (optional, see note below)
-                // cardsPerPage = getCardsPerPage();
-
-                // 1. Filter Cards
+                // Filter Cards
                 if (activeFilter === 'all') {
                     filteredCards = allCards;
                 } else {
                     filteredCards = allCards.filter(card => card.dataset.group === activeFilter);
                 }
 
-                // 2. Calculate Pagination for Filtered Set (using current cardsPerPage)
+                // Calculate Pagination
                 const totalCards = filteredCards.length;
-                const totalPages = Math.ceil(totalCards / cardsPerPage); // Use dynamic variable
+                const totalPages = Math.ceil(totalCards / cardsPerPage);
 
-                // Ensure currentPage is valid
+                // Validate current page
                 if (currentPage > totalPages && totalPages > 0) {
                     currentPage = totalPages;
                 } else if (totalPages === 0) {
                     currentPage = 1;
                 }
 
-                // 3. Show/Hide Cards
+                // Show/Hide Cards
                 allCards.forEach(card => card.style.display = 'none');
 
-                const startIndex = (currentPage - 1) * cardsPerPage; // Use dynamic variable
-                const endIndex = startIndex + cardsPerPage;        // Use dynamic variable
+                const startIndex = (currentPage - 1) * cardsPerPage;
+                const endIndex = startIndex + cardsPerPage;
                 const cardsToShow = filteredCards.slice(startIndex, endIndex);
 
                 cardsToShow.forEach(card => {
-                     card.style.display = 'flex';
+                    card.style.display = 'flex';
                 });
 
-                // 4. Update Pagination Controls
+                // Update Pagination Controls
                 if (totalPages > 0) {
-                     paginationControls.style.display = 'block';
-                     currentPageSpan.textContent = currentPage;
-                     totalPagesSpan.textContent = totalPages;
-                     prevButton.disabled = (currentPage === 1);
-                     nextButton.disabled = (currentPage === totalPages);
-                     noResultsMessage.style.display = 'none';
+                    paginationControls.style.display = 'block';
+                    currentPageSpan.textContent = currentPage;
+                    totalPagesSpan.textContent = totalPages;
+                    prevButton.disabled = (currentPage === 1);
+                    nextButton.disabled = (currentPage === totalPages);
+                    noResultsMessage.style.display = 'none';
                 } else {
-                     paginationControls.style.display = 'none';
-                     noResultsMessage.style.display = 'block';
+                    paginationControls.style.display = 'none';
+                    noResultsMessage.style.display = 'block';
                 }
-                 cardDisplayArea.style.display = totalCards > 0 ? 'block' : 'none';
+                
+                cardDisplayArea.style.display = totalCards > 0 ? 'block' : 'none';
+                
+                // Initialize viewers for visible cards
+                setTimeout(initializeVisibleViewers, 50);
             }
 
-            // --- Event Listeners ---
-
-            // Filter Buttons
+            // Event Listeners
             filterButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     activeFilter = button.dataset.filter;
@@ -396,57 +467,45 @@
                 });
             });
 
-            // Pagination Buttons
-            prevButton?.addEventListener('click', () => { // Optional chaining
+            prevButton?.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;
                     updateView();
-                    // Optional: scroll to top of card area after page change
                     cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
 
-            nextButton?.addEventListener('click', () => { // Optional chaining
-                 // Recalculate total pages based on current filter and cardsPerPage
-                 const currentTotalPages = Math.ceil(filteredCards.length / cardsPerPage);
-                 if (currentPage < currentTotalPages) {
+            nextButton?.addEventListener('click', () => {
+                const currentTotalPages = Math.ceil(filteredCards.length / cardsPerPage);
+                if (currentPage < currentTotalPages) {
                     currentPage++;
                     updateView();
-                     // Optional: scroll to top of card area after page change
                     cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
 
-            // --- Window Resize Listener (Optional but recommended) ---
+            // Window Resize Handler
             let resizeTimeout;
             window.addEventListener('resize', () => {
-                // Debounce resize event to avoid excessive updates
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
                     const newCardsPerPage = getCardsPerPage();
                     if (newCardsPerPage !== cardsPerPage) {
                         cardsPerPage = newCardsPerPage;
-                        // Recalculate current page based on new items per page
-                        // Find the index of the first visible card
-                        const firstVisibleIndex = (currentPage - 1) * (cardsPerPage === DESKTOP_CARDS_PER_PAGE ? MOBILE_CARDS_PER_PAGE : DESKTOP_CARDS_PER_PAGE); // Index based on *old* setting
-                        // Calculate new page number
+                        const firstVisibleIndex = (currentPage - 1) * cardsPerPage;
                         currentPage = Math.floor(firstVisibleIndex / cardsPerPage) + 1;
-
-                        updateView(); // Update view with new settings
+                        updateView();
                     }
-                }, 250); // Adjust debounce delay as needed (e.g., 250ms)
+                }, 250);
             });
 
-            // --- Initial View Setup ---
-            if (allCards.length > 0) {
-                 updateView();
-             } else if (paginationControls) {
-                 paginationControls.style.display = 'none';
-             }
-
+            // Initial Setup
+            if (document.querySelector('.protein-card-item')) {
+                gatherCards();
+                updateView();
+            }
         });
     </script>
-
 </body>
 </html>
 {% endblock %}
