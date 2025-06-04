@@ -306,206 +306,244 @@
         {% endif %}
     </div>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            // Configuration
-            const DESKTOP_CARDS_PER_PAGE = 15;
-            const MOBILE_CARDS_PER_PAGE = 8;
-            const MOBILE_BREAKPOINT = 768;
-            const MEDIA_URL = "{{ media_url }}";
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // ─── CONFIGURATION ───────────────────────────────────────────────────────────────
+    const DESKTOP_CARDS_PER_PAGE = 15;
+    const MOBILE_CARDS_PER_PAGE = 8;
+    const MOBILE_BREAKPOINT = 768;
+    const MEDIA_URL = "{{ media_url }}";  // Django will fill this in
 
-            // State Variables
-            let cardsPerPage = getCardsPerPage();
-            let currentPage = 1;
-            let activeFilter = 'all';
-            let allCards = [];
-            let filteredCards = [];
-            const initializedViewers = new Set();
+    // ─── STATE ───────────────────────────────────────────────────────────────────────
+    let cardsPerPage = getCardsPerPage();
+    let currentPage = 1;
+    let activeFilter = 'all';
+    let allCards = [];
+    let filteredCards = [];
 
-            // DOM Elements
-            const filterButtons = document.querySelectorAll('.filter-controls button');
-            const paginationControls = document.getElementById('pagination-global');
-            const prevButton = document.getElementById('global-prev-btn');
-            const nextButton = document.getElementById('global-next-btn');
-            const currentPageSpan = paginationControls?.querySelector('.current-page');
-            const totalPagesSpan = paginationControls?.querySelector('.total-pages');
-            const noResultsMessage = document.getElementById('no-results-message');
-            const cardDisplayArea = document.getElementById('card-display-area');
+    // Map proteinId → { viewer: <3DmolViewer>, element: <DOM node> }
+    const viewers = new Map();
 
-            // Helper Functions
-            function getCardsPerPage() {
-                return window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_CARDS_PER_PAGE : DESKTOP_CARDS_PER_PAGE;
+    // ─── DOM NODES ──────────────────────────────────────────────────────────────────
+    const filterButtons = document.querySelectorAll('.filter-controls button');
+    const paginationControls = document.getElementById('pagination-global');
+    const prevButton = document.getElementById('global-prev-btn');
+    const nextButton = document.getElementById('global-next-btn');
+    const currentPageSpan = paginationControls?.querySelector('.current-page');
+    const totalPagesSpan = paginationControls?.querySelector('.total-pages');
+    const noResultsMessage = document.getElementById('no-results-message');
+    const cardDisplayArea = document.getElementById('card-display-area');
+
+    // ─── HELPERS ────────────────────────────────────────────────────────────────────
+
+    function getCardsPerPage() {
+        return window.innerWidth < MOBILE_BREAKPOINT
+            ? MOBILE_CARDS_PER_PAGE
+            : DESKTOP_CARDS_PER_PAGE;
+    }
+
+    // Immediately destroy the WebGL context for a given proteinId
+    function destroyViewer(proteinId) {
+        if (!viewers.has(proteinId)) return;
+        const { viewer, element } = viewers.get(proteinId);
+
+        // 1) Lose the WebGL context
+        try {
+            const gl = viewer.GLViewer?.gl;
+            if (gl) {
+                const ext = gl.getExtension('WEBGL_lose_context');
+                if (ext) ext.loseContext();
             }
+        } catch (e) {
+            console.warn(`Could not lose WebGL context for ${proteinId}:`, e);
+        }
 
-            function initializeVisibleViewers() {
-                // Get currently visible cards
-                const visibleCards = Array.from(document.querySelectorAll('.protein-card-item'))
-                    .filter(card => window.getComputedStyle(card).display !== 'none');
-                
-                visibleCards.forEach(card => {
-                    const proteinId = card.dataset.proteinId;
-                    
-                    // Skip if already initialized
-                    if (initializedViewers.has(proteinId)) return;
-                    
-                    const pdbPath = card.dataset.pdbPath;
-                    const viewerElement = document.getElementById(`viewer-${proteinId}`);
-                    
-                    if (!viewerElement) return;
-                    
-                    // Handle missing PDB path
-                    if (!pdbPath || pdbPath === "undefined") {
-                        viewerElement.innerHTML = '<span class="load-error">No PDB Path</span>';
-                        initializedViewers.add(proteinId);
-                        return;
-                    }
+        // 2) Clear out the container’s HTML so 3Dmol can’t re‐use it
+        element.innerHTML = "";
 
-                    try {
-                        const fullPath = MEDIA_URL + pdbPath;
-                        const filename = pdbPath.split('/').pop();
-                        const format = filename.split('.').pop().toLowerCase();
-                        const validFormats = ['pdb', 'cif', 'sdf', 'mol2'];
-                        const finalFormat = validFormats.includes(format) ? format : 'pdb';
+        // 3) Remove from our map
+        viewers.delete(proteinId);
+    }
 
-                        const viewer = $3Dmol.createViewer(viewerElement, {
-                            backgroundColor: '#f0f0f0',
-                            antialias: true
-                        });
+    // Create a 3Dmol viewer ONCE we know the card is visible and sized
+    function createViewerIfNeeded(card) {
+        const proteinId = card.dataset.proteinId;
+        if (viewers.has(proteinId)) return;  // already done
 
-                        $3Dmol.download(fullPath, viewer, { format: finalFormat })
-                            .then(() => {
-                                viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
-                                viewer.zoomTo();
-                                viewer.render();
-                                viewer.zoom(1.2);
-                                viewer.render();
-                                viewer.spin(true);
-                                initializedViewers.add(proteinId);
-                            })
-                            .catch(err => {
-                                viewerElement.innerHTML = '<span class="load-error">Load Error</span>';
-                                console.error(`Error loading PDB for ${proteinId}:`, err);
-                                initializedViewers.add(proteinId);
-                            });
-                    } catch (e) {
-                        viewerElement.innerHTML = '<span class="load-error">Init Error</span>';
-                        console.error(`Error creating viewer for ${proteinId}:`, e);
-                        initializedViewers.add(proteinId);
-                    }
+        const pdbPath = card.dataset.pdbPath;
+        const container = document.getElementById(`viewer-${proteinId}`);
+        if (!container) return;
+
+        // If there’s no PDB path, show an in‐place error
+        if (!pdbPath || pdbPath === "undefined") {
+            container.innerHTML = '<span class="load-error">No PDB Path</span>';
+            // Mark as “done” so we don’t keep trying
+            viewers.set(proteinId, { viewer: null, element: container });
+            return;
+        }
+
+        try {
+            // Build the full URL and guess the format
+            const fullPath = MEDIA_URL + pdbPath;
+            const filename = pdbPath.split('/').pop();
+            const ext = filename.split('.').pop().toLowerCase();
+            const validFormats = ['pdb', 'cif', 'sdf', 'mol2'];
+            const finalFormat = validFormats.includes(ext) ? ext : 'pdb';
+
+            // Create a new 3Dmol viewer
+            const v = $3Dmol.createViewer(container, {
+                backgroundColor: '#f0f0f0',
+                antialias: true
+            });
+            viewers.set(proteinId, { viewer: v, element: container });
+
+            // Download + render
+            $3Dmol.download(fullPath, v, { format: finalFormat })
+                .then(() => {
+                    v.setStyle({}, { cartoon: { color: 'spectrum' } });
+                    v.zoomTo();
+                    v.render();
+                    v.zoom(1.2);
+                    v.render();
+                    v.spin(true);
+                })
+                .catch(err => {
+                    container.innerHTML = '<span class="load-error">Load Error</span>';
+                    console.error(`Error loading PDB for ${proteinId}:`, err);
                 });
+        } catch (e) {
+            container.innerHTML = '<span class="load-error">Init Error</span>';
+            console.error(`Error initializing viewer for ${proteinId}:`, e);
+            viewers.set(proteinId, { viewer: null, element: container });
+        }
+    }
+
+    // Show or hide cards based on filter & page, destroy any viewers for hidden cards,
+    // then create new viewers for visible cards.
+    function updateView() {
+        if (!cardDisplayArea || !paginationControls) return;
+
+        // Re‐compute cardsPerPage in case of a resize
+        cardsPerPage = getCardsPerPage();
+
+        // 1) Filter logic
+        if (activeFilter === 'all') {
+            filteredCards = allCards;
+        } else {
+            filteredCards = allCards.filter(card => card.dataset.group === activeFilter);
+        }
+
+        const totalCards = filteredCards.length;
+        const totalPages = Math.ceil(totalCards / cardsPerPage);
+
+        if (currentPage > totalPages && totalPages > 0) {
+            currentPage = totalPages;
+        } else if (totalPages === 0) {
+            currentPage = 1;
+        }
+
+        // 2) Determine which proteinIds SHOULD be visible this frame
+        const startIdx = (currentPage - 1) * cardsPerPage;
+        const endIdx = startIdx + cardsPerPage;
+        const visibleSet = new Set(
+            filteredCards.slice(startIdx, endIdx).map(c => c.dataset.proteinId)
+        );
+
+        // 3) Any viewer in `viewers` whose proteinId is NOT in visibleSet must be destroyed
+        for (let [pid, _] of viewers) {
+            if (!visibleSet.has(pid)) {
+                destroyViewer(pid);
             }
+        }
 
-            function gatherCards() {
-                if (cardDisplayArea) {
-                    allCards = Array.from(cardDisplayArea.querySelectorAll('.protein-card-item'));
-                }
-            }
+        // 4) Hide all cards, then show exactly those in [startIdx..endIdx)
+        allCards.forEach(card => { card.style.display = 'none'; });
+        filteredCards.slice(startIdx, endIdx).forEach(card => {
+            card.style.display = 'flex';
+        });
 
-            // Main Update Function
-            function updateView() {
-                if (!cardDisplayArea || !paginationControls) return;
-                
-                // Re-check cards per page in case of resize
-                cardsPerPage = getCardsPerPage();
+        // 5) Update pagination UI
+        if (totalPages > 0) {
+            paginationControls.style.display = 'block';
+            currentPageSpan.textContent = currentPage;
+            totalPagesSpan.textContent = totalPages;
+            prevButton.disabled = (currentPage === 1);
+            nextButton.disabled = (currentPage === totalPages);
+            noResultsMessage.style.display = 'none';
+        } else {
+            paginationControls.style.display = 'none';
+            noResultsMessage.style.display = 'block';
+        }
+        cardDisplayArea.style.display = totalCards > 0 ? 'block' : 'none';
 
-                // Filter Cards
-                if (activeFilter === 'all') {
-                    filteredCards = allCards;
-                } else {
-                    filteredCards = allCards.filter(card => card.dataset.group === activeFilter);
-                }
+        // 6) After the browser has laid out the newly‐visible cards (so their container
+        //    divs are nonzero height), create any missing viewers. A small timeout lets
+        //    the DOM settle.
+        setTimeout(() => {
+            filteredCards.slice(startIdx, endIdx).forEach(createViewerIfNeeded);
+        }, 20);
+    }
 
-                // Calculate Pagination
-                const totalCards = filteredCards.length;
-                const totalPages = Math.ceil(totalCards / cardsPerPage);
+    // Gather all .protein-card-item nodes once on load
+    function gatherCards() {
+        if (cardDisplayArea) {
+            allCards = Array.from(cardDisplayArea.querySelectorAll('.protein-card-item'));
+        }
+    }
 
-                // Validate current page
-                if (currentPage > totalPages && totalPages > 0) {
-                    currentPage = totalPages;
-                } else if (totalPages === 0) {
-                    currentPage = 1;
-                }
+    // ─── EVENT LISTENERS ─────────────────────────────────────────────────────────────
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            activeFilter = button.dataset.filter;
+            currentPage = 1;
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            updateView();
+        });
+    });
 
-                // Show/Hide Cards
-                allCards.forEach(card => card.style.display = 'none');
+    prevButton?.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            updateView();
+            cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
 
-                const startIndex = (currentPage - 1) * cardsPerPage;
-                const endIndex = startIndex + cardsPerPage;
-                const cardsToShow = filteredCards.slice(startIndex, endIndex);
+    nextButton?.addEventListener('click', () => {
+        const maxPages = Math.ceil(filteredCards.length / cardsPerPage);
+        if (currentPage < maxPages) {
+            currentPage++;
+            updateView();
+            cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
 
-                cardsToShow.forEach(card => {
-                    card.style.display = 'flex';
-                });
-
-                // Update Pagination Controls
-                if (totalPages > 0) {
-                    paginationControls.style.display = 'block';
-                    currentPageSpan.textContent = currentPage;
-                    totalPagesSpan.textContent = totalPages;
-                    prevButton.disabled = (currentPage === 1);
-                    nextButton.disabled = (currentPage === totalPages);
-                    noResultsMessage.style.display = 'none';
-                } else {
-                    paginationControls.style.display = 'none';
-                    noResultsMessage.style.display = 'block';
-                }
-                
-                cardDisplayArea.style.display = totalCards > 0 ? 'block' : 'none';
-                
-                // Initialize viewers for visible cards
-                setTimeout(initializeVisibleViewers, 50);
-            }
-
-            // Event Listeners
-            filterButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    activeFilter = button.dataset.filter;
-                    currentPage = 1;
-                    filterButtons.forEach(btn => btn.classList.remove('active'));
-                    button.classList.add('active');
-                    updateView();
-                });
-            });
-
-            prevButton?.addEventListener('click', () => {
-                if (currentPage > 1) {
-                    currentPage--;
-                    updateView();
-                    cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
-
-            nextButton?.addEventListener('click', () => {
-                const currentTotalPages = Math.ceil(filteredCards.length / cardsPerPage);
-                if (currentPage < currentTotalPages) {
-                    currentPage++;
-                    updateView();
-                    cardDisplayArea?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
-
-            // Window Resize Handler
-            let resizeTimeout;
-            window.addEventListener('resize', () => {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(() => {
-                    const newCardsPerPage = getCardsPerPage();
-                    if (newCardsPerPage !== cardsPerPage) {
-                        cardsPerPage = newCardsPerPage;
-                        const firstVisibleIndex = (currentPage - 1) * cardsPerPage;
-                        currentPage = Math.floor(firstVisibleIndex / cardsPerPage) + 1;
-                        updateView();
-                    }
-                }, 250);
-            });
-
-            // Initial Setup
-            if (document.querySelector('.protein-card-item')) {
-                gatherCards();
+    // Debounce window resize to recalc cardsPerPage
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            const newCpp = getCardsPerPage();
+            if (newCpp !== cardsPerPage) {
+                cardsPerPage = newCpp;
+                // Recompute currentPage so that the same first‐visible index stays roughly visible
+                const firstVisibleIndex = (currentPage - 1) * cardsPerPage;
+                currentPage = Math.floor(firstVisibleIndex / cardsPerPage) + 1;
                 updateView();
             }
-        });
-    </script>
+        }, 200);
+    });
+
+    // ─── INITIAL SETUP ────────────────────────────────────────────────────────────────
+    if (document.querySelector('.protein-card-item')) {
+        gatherCards();
+        updateView();
+    }
+});
+</script>
+
+
 </body>
 </html>
 {% endblock %}
