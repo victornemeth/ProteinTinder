@@ -109,6 +109,11 @@
       pointer-events:none;
       margin-top:-35px;    
     }
+/* disable touch scrolling and panning while the user is over the bar */
+#domain-bar,
+.domain-segment {
+  touch-action: none;   /* ← key line */
+}
 
   </style>
 
@@ -203,6 +208,10 @@
   {{ domain_data_json|safe }}
 </script>
 <script>
+function onPointerAndMouse(el, type, handler, options) {
+  el.addEventListener(type.replace('mouse', 'pointer'), handler, options);
+  el.addEventListener(type,                               handler, options);
+}
 
 
 /* ------------------------------------------------------------------
@@ -430,7 +439,7 @@ function renderDomainVisuals(){
     seg.title = `${domain.name||'Unnamed'} (${s}-${e})`;
 
     /* ----------------  MOUSE EVENTS  ---------------- */
-    seg.addEventListener('mousedown',ev =>{
+    onPointerAndMouse(seg, 'mousedown', ev => {
       if (ev.target.classList.contains('domain-label-input')) return; // typing
       ev.stopPropagation();
 
@@ -448,7 +457,7 @@ function renderDomainVisuals(){
       }
     });
 
-    seg.addEventListener('mousemove',ev =>{
+    onPointerAndMouse(seg, 'mousemove', ev => {
       if (isDraggingEdge || isDraggingToCreate) return;
       const rect = seg.getBoundingClientRect();
       const x    = ev.clientX - rect.left;
@@ -458,7 +467,9 @@ function renderDomainVisuals(){
         : (x<edge || rect.width-x<edge) ? 'ew-resize'
         : 'pointer';
     });
-    seg.addEventListener('mouseleave',() => seg.style.cursor='pointer');
+    onPointerAndMouse(seg, 'mouseleave', () => {
+     seg.style.cursor = 'pointer';
+    });
 
     /* --------  NAME INPUT  -------- */
     const nameInput = document.createElement('input');
@@ -586,18 +597,24 @@ function initiateEdgeDrag(ev, idx, side){
   };
   const up = ()=>{
     isDraggingEdge=false; draggedEdgeSide=null;
-    document.removeEventListener('mousemove',move);
-    document.removeEventListener('mouseup',up);
+    // document.removeEventListener('mousemove',move);
+    // document.removeEventListener('mouseup',up);
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('mousemove',     move);
+    document.removeEventListener('pointerup',   up);
+    document.removeEventListener('mouseup',       up);
   };
-  document.addEventListener('mousemove',move);
-  document.addEventListener('mouseup',up);
+  // document.addEventListener('mousemove',move);
+  // document.addEventListener('mouseup',up);
+    onPointerAndMouse(document, 'mousemove', move);
+    onPointerAndMouse(document, 'mouseup',   up);
 }
 
 
 /* ------------------------------------------------------------------
    BAR CLICK → CREATE NEW SEGMENT (drag-to-create)
 ------------------------------------------------------------------ */
-ui.domainBar.addEventListener('mousedown',ev=>{
+onPointerAndMouse(ui.domainBar, 'mousedown', ev => {
   if (ev.target!==ui.domainBar || isDraggingEdge || proteinLength<=0) return;
 
   /* Clicking empty bar while a segment is selected just deselects */
@@ -615,8 +632,10 @@ ui.domainBar.addEventListener('mousedown',ev=>{
   ui.tempDragSegment.style.width='0%';
   ui.tempDragSegment.style.display='block';
 
-  document.addEventListener('mousemove',handleDragCreateMove);
-  document.addEventListener('mouseup',handleDragCreateEnd);
+  // document.addEventListener('mousemove',handleDragCreateMove);
+  // document.addEventListener('mouseup',handleDragCreateEnd);
+  onPointerAndMouse(document, 'mousemove', handleDragCreateMove);
+  onPointerAndMouse(document, 'mouseup',   handleDragCreateEnd);
 });
 
 function handleDragCreateMove(e){
