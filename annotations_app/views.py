@@ -33,6 +33,7 @@ from django.http import HttpResponse
 from collections import defaultdict
 from django.utils.encoding import smart_str  # To ensure UTF-8 strings
 from django.contrib.auth import get_user_model
+from django.db.models import Prefetch                   # NEW
 
 from .utils import extract_pdb_sequence
 
@@ -1329,21 +1330,48 @@ def domain_annotation_download(request, folder_id):
 
     folder = get_object_or_404(ProteinFolder, pk=folder_id)
 
+    # --- which user's data are we exporting? ---------------------------
+    user_id = request.GET.get("user")                # from “…?user=42”
+    if user_id:
+        try:
+            target_user = get_user_model().objects.get(pk=user_id)
+        except get_user_model().DoesNotExist:
+            raise Http404("User not found.")
+    else:
+        target_user = request.user                   # fallback
+
+
+
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
 
-        proteins = (
-            Protein.objects.filter(folder=folder)
-            .prefetch_related("manual_domain_annotations")
-            .order_by("protein_id")
-        )
+        # proteins = (
+        #     Protein.objects.filter(folder=folder)
+        #     .prefetch_related("manual_domain_annotations")
+        #     .order_by("protein_id")
+        # )
+        domains_qs = ManualDomainAnnotation.objects.filter(   # only wanted user
+                            user=target_user
+                        ).order_by("start_pos")
 
+        proteins = (
+            Protein.objects.filter(
+                folder=folder,
+                manual_domain_annotations__user=target_user   # at least one split
+            )
+            .prefetch_related(                                # attach just those
+                Prefetch("manual_domain_annotations",
+                        queryset=domains_qs,
+                        to_attr="user_domains")
+            )
+            .order_by("protein_id")
+            .distinct()
+        )
         wrote_any = False
 
         for protein in proteins:
-            domains = list(
-                protein.manual_domain_annotations.all().order_by("start_pos")
-            )
+            domains = protein.user_domains        # already filtered & ordered
+
             if not domains:
                 continue
 
