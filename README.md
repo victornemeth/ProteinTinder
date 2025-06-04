@@ -83,7 +83,8 @@ Refine previously annotated domains by uploading `.pdb` and `.csv` files togethe
 
 - If you have any suggestions please let me know!
 - More robust nginx deployment
-- Expanding domain correction by able to easily modify borders, names, etc.
+- Expanding domain correction with the ability to easily modify borders, names, etc.
+
 ---
 
 ## ⚙️ Run Locally
