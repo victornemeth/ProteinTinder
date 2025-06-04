@@ -512,8 +512,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     buildDomainBar();
   });
 
-  stage = new NGL.Stage("viewport", { backgroundColor: "white", fog: false });
-  stage.setParameters({ backgroundColor: "white", lightIntensity: 1.2, fog: false });
+  stage = new NGL.Stage("viewport", { backgroundColor: "black", fog: false });
+  stage.setParameters({
+      fog: false,
+      fogNear: 100,
+      fogFar: 100,
+      lightIntensity: 1.2
+    });
   window.addEventListener("resize", () => stage.handleResize());
 
   try {

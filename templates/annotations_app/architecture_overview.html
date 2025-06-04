@@ -110,69 +110,151 @@ h2                {margin-bottom:15px;font-size:1.6em}
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", ()=>{
+document.addEventListener("DOMContentLoaded", () => {
 
-  /* ---------- config ------------------------------------------------- */
-  const DESKTOP = 16, MOBILE = 8, BRK = 768;
-  const palette = ['#e74c3c','#3498db','#2ecc71','#f39c12',
-                   '#9b59b6','#1abc9c','#e67e22','#8e44ad',
-                   '#34495e','#f1c40f','#c0392b','#2980b9'];
+  /* ========== CONFIG ================================================== */
+  const DESKTOP_PER_PAGE   = 16;     // keep ≤ 16 NGL viewers alive
+  const MOBILE_PER_PAGE    = 8;
+  const MOBILE_BREAKPOINT  = 768;
 
+  /* 12-colour qualitative palette */
+  const palette = [
+    '#e74c3c','#3498db','#2ecc71','#f39c12',
+    '#9b59b6','#1abc9c','#e67e22','#8e44ad',
+    '#34495e','#f1c40f','#c0392b','#2980b9'
+  ];
+
+  /* ========== COLLECT CARDS =========================================== */
   const cards = Array.from(document.querySelectorAll(".protein-card"));
-  if(!cards.length) return;
+  if (!cards.length) return;
 
-  const pager=document.getElementById("pager"),
-        prev=document.getElementById("prev-btn"),
-        next=document.getElementById("next-btn"),
-        cur =pager.querySelector(".cur-page"),
-        tot =pager.querySelector(".total-pages");
+  /* pagination elements */
+  const pager     = document.getElementById("pager");
+  const prevBtn   = document.getElementById("prev-btn");
+  const nextBtn   = document.getElementById("next-btn");
+  const curPageEl = pager.querySelector(".cur-page");
+  const totalEl   = pager.querySelector(".total-pages");
 
-  let perPage=innerWidth<BRK?MOBILE:DESKTOP, page=1,
-      pages=Math.ceil(cards.length/perPage);
-  tot.textContent=pages; pager.style.display=pages>1?"block":"none";
+  let perPage = window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_PER_PAGE : DESKTOP_PER_PAGE;
+  let page    = 1;
+  let pages   = Math.ceil(cards.length / perPage);
+  totalEl.textContent = pages;
+  pager.style.display = pages > 1 ? "block" : "none";
 
-  const stages=new Map();
+  /* cache of active NGL stages (protein-id ➔ Stage) */
+  const stages = new Map();
 
-  const decode=u=>u.replace(/\\u([0-9a-fA-F]{4})/g,
-                       (_,h)=>String.fromCharCode(parseInt(h,16)));
+  /* helper to decode Django’s \uXXXX-escaped paths */
+  const decode = str =>
+    str.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 
-  function load(card){
-      const id=card.dataset.proteinId; if(stages.has(id)) return;
-      const rel=decode(card.querySelector(".viewer").dataset.relpath||"");
-      if(!rel){card.querySelector(".viewer").textContent="No PDB"; return;}
+  /* ---------- create a viewer when the card becomes visible ---------- */
+  function addViewer(card){
+      const id = card.dataset.proteinId;
+      if (stages.has(id)) return;                          // already initialised
 
-      const domains=JSON.parse(card.dataset.domains||"[]");
-      const st=new NGL.Stage(card.querySelector(".viewer"),{backgroundColor:"white"});
-      st.loadFile("{{ media_url }}"+rel,{defaultRepresentation:false})
-        .then(c=>{
-            c.addRepresentation("cartoon",{color:"#cccccc",opacity:0.35});
-            domains.forEach((d,i)=>{
-                const col=palette[i%palette.length];
-                c.addRepresentation("cartoon",{sele:`${d.s}-${d.e}`,color:col});
-                const li=card.querySelector(`li[data-dom-idx="${i}"]`);
-                if(li) li.style.color=col;
-            });
-            c.autoView(200);st.setSpin(true);
-        })
-        .catch(e=>{console.error(e);card.querySelector(".viewer").textContent="Load err";});
-      stages.set(id,st);
+      const viewDiv = card.querySelector(".viewer");
+      const relPath = decode(viewDiv.dataset.relpath || "");
+      if (!relPath){ viewDiv.textContent = "No PDB"; return; }
+
+      const domains = JSON.parse(card.dataset.domains || "[]");
+
+      /* Stage identical to the domain-overview page */
+      const stage = new NGL.Stage(viewDiv, { backgroundColor: "black" });
+
+      stage.setParameters({
+        fog: false,
+        fogNear: 100,
+        fogFar: 100,
+        lightIntensity: 1.2
+      });
+
+      stage.loadFile("{{ media_url }}" + relPath, { defaultRepresentation: false })
+           .then(comp => {
+              /* backbone in solid light-grey (no transparency) */
+              comp.addRepresentation("cartoon", {
+                  sele:  "polymer",
+                  color: "lightgray",
+                  name:  "background"
+              });
+
+              /* coloured domains */
+              domains.forEach((dom, i) => {
+                  const colour = palette[i % palette.length];
+                  comp.addRepresentation("cartoon", {
+                      sele:  `${dom.s}-${dom.e}`,
+                      color: colour,
+                      name:  `domain-${i}`
+                  });
+                  /* match list item colour */
+                  const li = card.querySelector(`li[data-dom-idx="${i}"]`);
+                  if (li) li.style.color = colour;
+              });
+
+              comp.autoView(200);
+              stage.setSpin(true);
+           })
+           .catch(err => {
+              console.error(err);
+              viewDiv.textContent = "Load err";
+           });
+
+      stages.set(id, stage);
   }
-  function drop(card){const s=stages.get(card.dataset.proteinId);if(s){s.dispose();stages.delete(card.dataset.proteinId);} }
 
+  /* ---------- dispose viewer when card is hidden ---------------------- */
+  function removeViewer(card){
+      const id    = card.dataset.proteinId;
+      const stage = stages.get(id);
+      if (stage){
+          stage.dispose();
+          stages.delete(id);
+      }
+  }
+
+  /* ---------- render current page ------------------------------------- */
   function render(){
-      const want=innerWidth<BRK?MOBILE:DESKTOP;
-      if(want!==perPage){perPage=want;pages=Math.ceil(cards.length/perPage);
-                         if(page>pages)page=pages;tot.textContent=pages;}
-      const start=(page-1)*perPage,end=start+perPage;
-      cards.forEach((c,i)=>{if(i>=start&&i<end){c.style.display="block";load(c);}
-                            else{c.style.display="none";drop(c);} });
-      cur.textContent=page; prev.disabled=page===1; next.disabled=page===pages;
-      pager.style.display=pages>1?"block":"none";
+      /* recompute page size on resize */
+      const want = window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_PER_PAGE : DESKTOP_PER_PAGE;
+      if (want !== perPage){
+          perPage = want;
+          pages   = Math.ceil(cards.length / perPage);
+          if (page > pages) page = pages;
+          totalEl.textContent = pages;
+      }
+
+      const start = (page - 1) * perPage;
+      const end   = start + perPage;
+
+      cards.forEach((card, idx) => {
+          if (idx >= start && idx < end){
+              card.style.display = "block";
+              addViewer(card);
+          } else {
+              card.style.display = "none";
+              removeViewer(card);
+          }
+      });
+
+      curPageEl.textContent = page;
+      prevBtn.disabled = page === 1;
+      nextBtn.disabled = page === pages;
+      pager.style.display = pages > 1 ? "block" : "none";
   }
-  prev.onclick=()=>{if(page>1){page--;render();}};
-  next.onclick=()=>{if(page<pages){page++;render();}};
-  let t;onresize=()=>{clearTimeout(t);t=setTimeout(render,200);};
+
+  /* ---------- event handlers ------------------------------------------ */
+  prevBtn.addEventListener("click", () => { if (page > 1){ page--; render(); }});
+  nextBtn.addEventListener("click", () => { if (page < pages){ page++; render(); }});
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(render, 200);
+  });
+
+  /* first paint */
   render();
 });
 </script>
+
 {% endblock %}
