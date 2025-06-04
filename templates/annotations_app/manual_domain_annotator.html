@@ -398,34 +398,68 @@ function applyNGLRepresentations(){
    DOMAIN BAR RENDERING
 ------------------------------------------------------------------ */
 function renderDomainVisuals(){
+  /* Build a *sorted copy* purely for display logic.
+     The `domainData` array itself is **not** mutated any more, so
+     colour assignments stay stable and “other domains” never appear
+     to jump around when one segment is resized. */
   const sorted = [...domainData].sort((a,b)=>(a.start||0)-(b.start||0));
+
+  // Remove any existing segments
   ui.domainBar.querySelectorAll('.domain-segment').forEach(el => el.remove());
 
-  /* ... (tick marks code omitted for brevity) ... */
+  /* ----------  TICK MARKS  ---------- */
+  ui.tickContainer.innerHTML = '';
+  if (proteinLength > 0) {
+    // Show tick marks every N residues (at least 10, up to ~10 across)
+    const tickStep = Math.max(10, Math.ceil(proteinLength/10/10)*10);
+    for (let i = 0; i <= proteinLength; i += tickStep) {
+      const label = document.createElement('div');
+      label.className = 'tick-label';
+      label.style.left = `${(i/proteinLength)*100}%`;
+      label.textContent = (i === 0 ? 1 : i);
+      ui.tickContainer.appendChild(label);
+    }
+    // Final tick at proteinLength if not exactly divisible
+    if (proteinLength % tickStep) {
+      const label = document.createElement('div');
+      label.className = 'tick-label';
+      label.style.left = '100%';
+      label.textContent = proteinLength;
+      ui.tickContainer.appendChild(label);
+    }
 
-  sorted.forEach((domain,sortedIdx) =>{
-    const originalIdx = domainData.indexOf(domain); // real index
+    // Update the zoom bar if a domain is selected
+    renderZoomBar(currentDomain());
+  }
+
+  /* ----------  SEGMENTS  ---------- */
+  sorted.forEach((domain, sortedIdx) => {
+    const originalIdx = domainData.indexOf(domain);
     const seg = document.createElement('div');
     seg.className = 'domain-segment';
     if (originalIdx === selectedDomainIndex && !isDraggingEdge) {
       seg.classList.add('highlighted');
     }
 
-    const s = Math.max(1, domain.start||1);
-    const e = Math.min(proteinLength, domain.end||s);
-    const leftPct  = ((s-1)/proteinLength)*100;
-    const widthPct = Math.max(.2, ((e-s+1)/proteinLength)*100);
+    // Compute left% and width% based on start/end
+    const s = Math.max(1, domain.start || 1);
+    const e = Math.min(proteinLength, domain.end || s);
+    const leftPct  = ((s - 1) / proteinLength) * 100;
+    const widthPct = Math.max(0.2, ((e - s + 1) / proteinLength) * 100);
 
-    seg.style.left  = `${leftPct}%`;
+    seg.style.left = `${leftPct}%`;
     seg.style.width = `${widthPct}%`;
     seg.style.backgroundColor =
       domainColourMap[domain.name || 'Unnamed'] || '#7f8c8d';
 
-    seg.title = `${domain.name||'Unnamed'} (${s}-${e})`;
+    // Keep the “hover” title showing residue range:
+    seg.title = `${domain.name || 'Unnamed'} (${s}-${e})`;
 
-    /* ----------------  RESIZE ONLY ON “mousedown” NEAR EDGE  ---------------- */
+    /* ------------------------------------------------------------------
+       MOUSE EVENTS: resize only when mousedown near an edge
+    ------------------------------------------------------------------ */
     onPointerAndMouse(seg, 'mousedown', ev => {
-      // If they clicked inside the name‐input, do nothing here:
+      // If clicking in the name‐input, do nothing here:
       if (ev.target.classList.contains('domain-label-input')) return;
       ev.stopPropagation();
 
@@ -433,39 +467,44 @@ function renderDomainVisuals(){
       const x    = ev.clientX - rect.left;
       const edge = Math.min(15, rect.width * 0.25);
 
-      // Only if click is within the “start”‐edge zone, start resizing from start:
-      if (x < edge && rect.width > edge*2) {
+      // If within the “start” edge zone, start edge‐drag from start:
+      if (x < edge && rect.width > edge * 2) {
         initiateEdgeDrag(ev, originalIdx, 'start');
       }
-      // Only if click is within the “end”‐edge zone, start resizing from end:
-      else if (rect.width - x < edge && rect.width > edge*2) {
+      // If within the “end” edge zone, start edge‐drag from end:
+      else if (rect.width - x < edge && rect.width > edge * 2) {
         initiateEdgeDrag(ev, originalIdx, 'end');
       }
-      // Otherwise do nothing on mousedown; let the plain click handler do selection.
+      // Otherwise: do nothing on mousedown; a plain click will select.
     });
 
-    /* ---------------  SELECT ON “click” ANYWHERE INSIDE (except the input)  -------------- */
+    /* ------------------------------------------------------------------
+       CLICK: select domain by clicking anywhere in the box (except input)
+    ------------------------------------------------------------------ */
     seg.addEventListener('click', ev => {
       if (ev.target.classList.contains('domain-label-input')) return;
       ev.stopPropagation();
       selectDomain(originalIdx);
     });
 
+    /* Change cursor when near an edge, otherwise pointer */
     onPointerAndMouse(seg, 'mousemove', ev => {
       if (isDraggingEdge || isDraggingToCreate) return;
       const rect = seg.getBoundingClientRect();
       const x    = ev.clientX - rect.left;
       const edge = Math.min(15, rect.width * 0.25);
       seg.style.cursor =
-        (rect.width <= edge*2) ? 'pointer'
-        : (x<edge || rect.width-x<edge) ? 'ew-resize'
+        (rect.width <= edge * 2)         ? 'pointer'
+        : (x < edge || rect.width - x < edge) ? 'ew-resize'
         : 'pointer';
     });
     onPointerAndMouse(seg, 'mouseleave', () => {
       seg.style.cursor = 'pointer';
     });
 
-    /* --------  NAME INPUT  -------- */
+    /* ----------
+       NAME INPUT (unchanged)
+    ---------- */
     const nameInput = document.createElement('input');
     nameInput.type        = 'text';
     nameInput.value       = domain.name || '';
@@ -477,7 +516,7 @@ function renderDomainVisuals(){
 
     nameInput.oninput = () => {
       domain.name = nameInput.value.trim();
-      seg.title    = `${domain.name||'Unnamed'} (${s}-${e})`;
+      seg.title    = `${domain.name || 'Unnamed'} (${s}-${e})`;
     };
     nameInput.onchange = () => {
       assignDomainColours();
