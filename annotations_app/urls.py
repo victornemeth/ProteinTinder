@@ -64,5 +64,7 @@ urlpatterns = [
         name="domain_annotation_download",
     ),
     path("undo/manual/", views.undo_last_manual_domain, name="undo_manual_domain"),
+    path("manual/skip/", views.skip_manual_domain, name="skip_manual_domain"),
+
 
 ]
