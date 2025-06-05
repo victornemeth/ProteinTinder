@@ -1,6 +1,13 @@
-# 🧬 Annotate App
-![Logo](./ProteinTinder_white.png)
+<div align="center">
+
+# Protein Annotate App
+
+
+<img src="./ProteinTinder_white.png" alt="Logo" width="400"/>
+
 A **mobile-friendly**, **web-based** platform for visualizing and annotating 3D protein structures using [3Dmol.js](https://3dmol.csb.pitt.edu/) and [NGL.js](https://www.npmjs.com/package/ngl). Built with Django, this app supports protein annotation through intuitive gestures and interactive tools.
+
+</div>
 
 ---
 
