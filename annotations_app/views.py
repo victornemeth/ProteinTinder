@@ -1541,3 +1541,7 @@ def skip_manual_domain(request):
     except Exception as e:
         logger.error("Skip-manual failed: %s", e, exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
+
+
+def about_view(request):
+    return render(request, 'annotations_app/about.html')
