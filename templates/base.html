@@ -45,7 +45,7 @@ html, body {
 .auth-bar button, .auth-bar a {
     background: none;
     border: none;
-    color: #007bff; /* Standard link blue */
+    color: #E74C3C; /* Standard link blue */
     cursor: pointer;
     padding: 0;
     font: inherit;
@@ -128,10 +128,10 @@ html, body {
 
         <div class="auth-bar">
             {% if user.is_authenticated %}
-                <span>{{ user.username }}</span>
+                <span style="color: #5b4f4d;">{{ user.username }}</span>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
-                    <button type="submit">Logout</button>
+                    <button type="submit" style="color: #E74C3C; font-weight: 500;">Logout</button>
                 </form>
             {% else %}
                 <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
