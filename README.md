@@ -2,6 +2,7 @@
 
 # Protein Annotate App
 
+## The easy way to annotate proteins
 
 <img src="./ProteinTinder_white.png" alt="Logo" width="300"/>
 
