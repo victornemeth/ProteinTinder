@@ -132,7 +132,7 @@
 <div class="architecture-view">
    {% csrf_token %}
   <div class="container">
-    <h1>{{ annotation_title }} - {{ protein.protein_id }}</h1>
+    <h1 style="font-size: 1.3rem;"><strong>{{ annotation_title }}</strong> - {{ protein.protein_id }}</h1>
 
     {% if messages %}
       <ul class="messages">
