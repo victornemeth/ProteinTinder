@@ -188,6 +188,14 @@
       margin-top: 15px;
       font-weight: bold;
     }
+        /* ——— Highlight the selected bar‐segment ——— */
+    .domain-segment.selected {
+      border: 2px solid yellow;       /* or whatever “highlight” style you want */
+      opacity: 1 !important;           /* make sure it’s fully opaque */
+      /* you could also add a faint box‐shadow: */
+      box-shadow: 0 0 8px yellow;
+    }
+
   </style>
 <div class="architecture-view">
    {% csrf_token %}
@@ -284,6 +292,7 @@ const spinSpeed   = 0.01;
 const spinAxis    = [0, 1, 0];
 let proteinLength = 0;
 let domainIsWrong = [];
+let selectedDomainIndex = null;
 const colors = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#1abc9c",
                 "#e67e22","#8e44ad","#34495e","#f1c40f","#c0392b","#2980b9"];
 
@@ -352,17 +361,23 @@ function displayDomains() {
 
 function applyRepresentations() {
   if (!currentStructureComponent) return;
+
   const disp = displayDomains();
   const cmap = colourMap(disp);
   const style = styleSelect.value;
 
+  // 1) Clear out any old representations:
   currentStructureComponent.removeAllRepresentations();
+
+  // 2) Draw the entire chain (background) in light gray:
   currentStructureComponent.addRepresentation(style, {
     color: "lightgray",
     disableImpostor: true,
     disablePicking: true
   });
-  disp.forEach(dom => {
+
+  // 3) Draw every domain in its normal color, regardless of selection:
+  disp.forEach((dom) => {
     currentStructureComponent.addRepresentation(style, {
       sele: `${dom.start}-${dom.end}`,
       color: cmap[dom.name],
@@ -370,6 +385,21 @@ function applyRepresentations() {
       disablePicking: true
     });
   });
+
+  // 4) If there is a selectedDomainIndex, draw a “highlight” on top:
+  if (selectedDomainIndex !== null && disp[selectedDomainIndex]) {
+    const d = disp[selectedDomainIndex];
+    currentStructureComponent.addRepresentation("licorice", {
+      sele: `${d.start}-${d.end}`,
+      color: "yellow",
+      radiusType: "size",
+      radiusSize: 0.4,
+      disableImpostor: true,
+      disablePicking: true
+    });
+  }
+
+  // 5) Re‐center/zoom so everything remains visible:
   currentStructureComponent.autoView();
 }
 
@@ -442,8 +472,36 @@ function onDomainClick(e) {
   const idx = +e.currentTarget.dataset.domainIndex;
   if (!Number.isInteger(idx)) return;
   domainIsWrong[idx] = !domainIsWrong[idx];
+
+  if (selectedDomainIndex === idx) {
+      // If they click the same domain again, un‐select it:
+      selectedDomainIndex = null;
+    } else {
+      // Otherwise mark this index as “selected”:
+      selectedDomainIndex = idx;
+    }
+
   e.currentTarget.classList.toggle("wrong", domainIsWrong[idx]);
+
+  // If a domain was selected, add a special “selected” CSS class to the bar segment:
+  // (We’ll create that CSS class in a sec.)
+  // First, clear any existing “selected” classes:
+  document.querySelectorAll(".domain‐segment.selected").forEach(el => {
+    el.classList.remove("selected");
+  });
+  // If we still have a valid selection, add the class:
+  if (selectedDomainIndex !== null) {
+    const el = domainBarDiv.querySelector(`[data‐domain‐index="${selectedDomainIndex}"]`);
+    if (el) {
+      el.classList.add("selected");
+    }
+  }
+
   updateMergeToggleState();
+
+  // Finally, redraw the 3D representation so that the “selected” domain is highlighted:
+  applyRepresentations();
+  buildDomainBar();
 }
 
 async function handleSave() {
