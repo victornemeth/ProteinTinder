@@ -78,8 +78,27 @@ html, body {
     color: #fca103;
     text-decoration: none;
     letter-spacing: -0.3px;
+    display: inline-flex;
+    align-items: center;
+    transition: transform 0.2s ease, text-shadow 0.2s ease;
 }
 
+.app-title a:hover {
+    transform: translateY(-2px);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.app-title a:hover span:first-child {
+    color: #212529; /* darker black */
+}
+
+.app-title a:hover span:nth-child(2) {
+    color: #c0392b; /* deeper red */
+}
+.app-title a:hover img {
+    transform: rotate(-10deg) scale(1.05);
+    transition: transform 0.2s ease;
+}
 .auth-bar {
     font-size: 0.85em;
     white-space: nowrap;
