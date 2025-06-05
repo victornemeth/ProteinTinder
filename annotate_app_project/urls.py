@@ -15,7 +15,7 @@ urlpatterns = [
     # CHANGE the prefix for your app's URLs from 'annotate/' to '':
     path('', include('annotations_app.urls', namespace='annotations_app')), # <<< CHANGE IS HERE
 
-    path('admin/', admin.site.urls),
+    path('victor/nemeth/is/admin/', admin.site.urls),
     # REMOVE the old path that included 'annotate/' prefix:
     # path('annotate/', include('annotations_app.urls', namespace='annotations_app')), # <<< REMOVE THIS LINE
 

@@ -16,6 +16,19 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://proteintinder2.bionetic.org",
+    "http://proteintinder2.bionetic.org",  # add this just in case
+    "https://proteintinder.bionetic.org",
+    "http://proteintinder.bionetic.org",  # add this just in case
+]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+CSRF_COOKIE_SECURE = True
+# CSRF_COOKIE_DOMAIN = [".proteintinder2.bionetic.org",".proteintinder.bionetic.org"]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 

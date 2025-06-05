@@ -1,6 +1,7 @@
 # annotations_app/urls.py
 from . import views
 from django.urls import path
+from django.conf import settings
 
 app_name = 'annotations_app'
 
@@ -68,3 +69,7 @@ urlpatterns = [
 
 
 ]
+
+# Keep media URL config for development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
