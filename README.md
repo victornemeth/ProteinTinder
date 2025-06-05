@@ -91,7 +91,6 @@ Refine previously annotated domains by uploading `.pdb` and `.csv` files togethe
 ## 🛠️ To Do
 
 - If you have any suggestions please let me know!
-- More robust nginx deployment
 - Expanding domain correction with the ability to easily modify borders, names, etc.
 
 ---
@@ -106,3 +105,5 @@ docker compose up -d --build
 
 Connect via localhost:8000
 
+## Note
+The official website is safely deployed via NPM. This repository contains the version ready for local development.
