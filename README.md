@@ -1,6 +1,6 @@
 <div align="center">
 
-# Protein Annotate App
+# Protein Tinder
 
 ## The easy way to annotate proteins
 
