@@ -37,7 +37,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-key-f
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True' # Check for 'True' string
 
-ALLOWED_HOSTS = ['proteintinder2.bionetic.org', 'www.proteintinder2.bionetic.org']
+ALLOWED_HOSTS = ['proteintinder2.bionetic.org', 'www.proteintinder2.bionetic.org','proteintinder.bionetic.org', 'www.proteintinder.bionetic.org']
 
 
 # Application definition
@@ -157,6 +157,4 @@ MEDIA_ROOT = BASE_DIR / 'media' # Corresponds to /app/media/ in the container
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+USE_X_FORWARDED_HOST = True

@@ -190,6 +190,7 @@
     }
   </style>
 <div class="architecture-view">
+   {% csrf_token %}
   <div class="container">
     <div class="page-header">
         <h1>{{ annotation_title }} - {{ protein.protein_id }}</h1>
@@ -297,21 +298,14 @@ const statusDiv     = document.getElementById("status-message");
 const mergeToggle   = document.getElementById("mergeSameDomainsToggle");
 
 // ---------- HELPERS ----------
-function getCookie(name) {               // robust version (handles duplicates/whitespace)
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== "") {
-    const cookies = document.cookie.split(";");
-    for (let cookie of cookies) {
-      cookie = cookie.trim();
-      if (cookie.startsWith(name + "=")) {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
+function getCSRFCookie() {
+  // returns the *last* csrftoken in document.cookie
+  const cookies = document.cookie.split('; ').filter(c => c.startsWith('csrftoken='));
+  if (!cookies.length) return null;
+  return decodeURIComponent(cookies[cookies.length - 1].split('=')[1]);
 }
-const csrftoken = getCookie("csrftoken");
+
+const csrftoken = getCSRFCookie();
 
 function mergeAdjacent(domains) {
   if (!domains.length) return [];
