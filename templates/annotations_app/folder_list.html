@@ -140,10 +140,36 @@
     border: 1px solid #f5c6cb;  /* soft red border */
 }
          .messages li.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+.delete-button {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.85em;
+    font-weight: 500;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
 
+.delete-button:hover {
+    background-color: #f8d7da;
+}
 
         /* --- Mobile Styles (Applied when screen width is <= 767px) --- */
         @media (max-width: 767px) {
+            .upload-link-container {
+                margin-top: 25px;
+                text-align: center;
+            }
+
+            .upload-link {
+                display: inline-block;
+                width: auto;
+                max-width: 92%;
+                padding: 12px 18px;
+                font-size: 1em;
+            }
 
             .container {
                 max-width: 100%; /* Use full width */
@@ -223,6 +249,21 @@
                 padding: 12px 15px; /* Adjust padding */
                 font-size: 1.05em; /* Slightly larger font */
             }
+            .folder-actions .delete-button {
+                display: block; /* Make links full width */
+                width: 100%;
+                margin: 8px 0; /* Vertical space between actions */
+                padding: 8px 5px; /* More vertical padding for tapping */
+                text-align: center; /* Center text in link */
+                background-color: #f1f1f1; /* Give actions a button-like background */
+                border-radius: 5px;
+                font-size: 0.9em;
+                color: #c81414; /* Darker color for contrast */
+                font-weight: 500;
+            }
+            .folder-actions .delete-button:hover {
+                background-color: #f1b0b7;
+            }
         }
 
     </style>
@@ -287,7 +328,9 @@
       style="display:inline;"
       onsubmit="return confirm('Are you sure you want to delete the folder \'{{ entry.folder.name }}\'? This action cannot be undone.');">
     {% csrf_token %}
-    <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Del</button>
+    <!-- <button type="submit" class="action-link" style="background:none;border:none;color:#dc3545;cursor:pointer;">🗑 Del</button> -->
+    <button type="submit" class="action-link delete-button">🗑 Del</button>
+
 </form>
 
                         {% endif %}
