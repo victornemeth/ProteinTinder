@@ -66,7 +66,8 @@ Refine previously annotated domains by uploading `.pdb` and `.csv` files togethe
 - 📱 Mobile touch and desktop mouse support  
 - 📊 Overview dashboard for grouped annotations  
 - 🔐 User login and registration  
-- 💾 Annotation export (CSV/FASTA)
+- 👥 User to user interaction
+- 💾 Annotation export (CSV/FASTA/PDB)
 
 ---
 
