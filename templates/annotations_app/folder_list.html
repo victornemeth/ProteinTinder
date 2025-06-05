@@ -96,7 +96,7 @@
             margin-left: 12px; /* More space between actions */
             font-size: 0.85em; /* Smaller action links */
             text-decoration: none;
-            color: #007bff;
+            color: #1d49aa;
             padding: 4px 8px; /* Add padding for better click area (optional) */
             border-radius: 4px; /* Add radius (optional) */
             transition: background-color 0.2s ease;
@@ -134,7 +134,11 @@
          .messages li { padding: 12px 15px; border-radius: 5px; margin-bottom: 10px; }
          .messages li.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
          .messages li.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-         .messages li.info { background-color: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+         .messages li.info {
+    background-color: #f8d7da;  /* light tint of red */
+    color: #721c24;             /* dark red text */
+    border: 1px solid #f5c6cb;  /* soft red border */
+}
          .messages li.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
 
 
@@ -295,7 +299,7 @@
         </ul>
 
         <div class="upload-link-container">
-             <a class="upload-link" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
+             <a class="upload-link" style="background-color: #E74C3C;" href="{% url 'annotations_app:upload_zip' %}">📁 Upload New Folder</a>
          </div>
     </div>
 <script>

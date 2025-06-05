@@ -39,17 +39,73 @@
       .btn:hover        {background:#0b5ed7;box-shadow:0 2px 4px rgba(0,0,0,.15)}
       .btn--secondary   {background:#6c757d}
       .btn--secondary:hover{background:#5c636a}
+.btn--download {
+    background: #c0392b;
+    color: #fff;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.85em;
+    font-weight: 600;
+    padding: 8px 14px;
+    margin-left: 20px;
+    border: none;
+    border-radius: 6px;
+    text-decoration: none;
+    display: inline-block;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+    cursor: pointer;
+}
 
-      /* ---------- pagination bar -------------------------------------- */
-      .pagination-global{
-          text-align:center;margin:20px 0;font-size:.9em;display:none}
-      .pagination-global button{
-          background:#0d6efd;color:#fff;border:none;padding:6px 12px;
-          margin:0 6px;border-radius:4px;cursor:pointer}
-      .pagination-global button:disabled{
-          background:#ccc;cursor:not-allowed}
-      .pagination-global .page-info{margin:0 8px;color:#495057}
-      @media(max-width:767px){.pagination-global{font-size:.8em}}
+.btn--download:hover {
+    background: #b22e1f;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+/* ---------- pagination bar -------------------------------------- */
+.pagination-global {
+    text-align: center;
+    margin: 20px 0;
+    font-size: 0.9em;
+    display: none;
+}
+
+.pagination-global button {
+    background: #E74C3C;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    margin: 0 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 600;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.pagination-global button:hover:not(:disabled) {
+    background: #c0392b;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+.pagination-global button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.pagination-global .page-info {
+    margin: 0 8px;
+    color: #495057;
+}
+
+@media (max-width: 767px) {
+    .pagination-global {
+        font-size: 0.8em;
+    }
+}
+
   </style>
 
   <!-- NGL -->
@@ -62,11 +118,12 @@
   <a href="{% url 'annotations_app:view_folders' %}" class="back-link">← Folder list</a>
   <a href="{% url 'annotations_app:annotation_overview' folder.id %}" class="switch-btn">↔ Swipe overview</a>
   <!-- <a href="{% url 'annotations_app:domain_annotation_download' folder.id %}" class="btn" style="margin-left:10px">⬇ Download</a> -->
-  <a id="download-btn"
-    href="{% url 'annotations_app:domain_annotation_download' folder.id %}?user={{ target_user.id }}"
-    class="btn">
-      ⬇ Download
-  </a>
+<a id="download-btn"
+   href="{% url 'annotations_app:domain_annotation_download' folder.id %}?user={{ target_user.id }}"
+   class="btn btn--download">
+     📦 Download
+</a>
+
   <h2>Domain overview: {{ folder.name }}</h2>
 
   <div style="margin-bottom:15px">
