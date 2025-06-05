@@ -141,11 +141,8 @@ html, body {
     <img src="{% static 'images/ProteinTinder_icon.png' %}" alt="Logo" style="height: 24px; vertical-align: middle; margin-left: 6px;">
   </a>
 </span>
-
-
-
-
         <div class="auth-bar">
+            <a href="{% url 'annotations_app:about' %}" style="color: #6c757d; text-decoration: none; font-size: 1em;margin-right: 1em;font-weight: 700;">About</a>
             {% if user.is_authenticated %}
                 <span style="color: #5b4f4d;">{{ user.username }}</span>
                 <form method="post" action="{% url 'logout' %}">
