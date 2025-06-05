@@ -73,9 +73,9 @@ html, body {
 }
 
 .app-title a {
-    font-size: 1.1em;
+    font-size: 1.4em;
     font-weight: 600;
-    color: #0056b3;
+    color: #fca103;
     text-decoration: none;
     letter-spacing: -0.3px;
 }
@@ -116,11 +116,16 @@ html, body {
 </head>
 <body>
     <header class="app-header">
-        <span class="app-title">
-            <a href="{% url 'annotations_app:view_folders' %}">
-                <strong>Protein</strong>Tinder
-            </a>
-        </span>
+<span class="app-title">
+  <a href="{% url 'annotations_app:view_folders' %}" style="text-decoration: none;">
+    <span style="color: #000000; font-weight: 800;">Protein</span><span style="color: #E74C3C; font-weight: 700;">Tinder</span>
+    <img src="{% static 'images/ProteinTinder_icon.png' %}" alt="Logo" style="height: 24px; vertical-align: middle; margin-left: 6px;">
+  </a>
+</span>
+
+
+
+
         <div class="auth-bar">
             {% if user.is_authenticated %}
                 <span>{{ user.username }}</span>
