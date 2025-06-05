@@ -179,7 +179,9 @@
             transition: background-color 0.2s ease;
         }
         .global-pagination-controls button:hover:not(:disabled) {
-            background-color: #db2713;
+            background: #c0392b;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
         }
         .global-pagination-controls button:disabled {
             background-color: #cccccc;
@@ -197,16 +199,26 @@
              color: #6c757d;
              font-style: italic;
         }
-        .switch-btn {
-            float:right;
-            margin-left:10px;
-            font-size:.9em;
-            background:#e9ecef;
-            color:#495057;
-            padding:6px 10px;
-            border-radius:4px;
-            text-decoration:none
-        }
+.switch-btn {
+    float: right;
+    margin-left: 10px;
+    font-size: 0.9em;
+    background: #e9ecef;
+    color: #495057;
+    padding: 6px 10px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.switch-btn:hover {
+    background: #d6d8db;
+    color: #212529;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
 
         @media (min-width: 768px) {
             .protein-grid {
