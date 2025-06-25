@@ -2,169 +2,221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Protein Annotator{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="{% static 'images/ProteinTinder_icon.png' %}" type="image/png">
-    <style>
-
+  <meta charset="UTF-8">
+  <title>{% block title %}Protein Annotator{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="{% static 'images/ProteinTinder_icon.png' %}" type="image/png">
+  <style>
 html, body {
-    margin: 0;
-    padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    background-color: #f8f9fa; /* Lighter background */
-    color: #343a40; /* Darker default text */
-    font-size: 16px;
-    line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f8f9fa;
+  color: #343a40;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
-        /* --- Page Header --- */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 18px; /* Reduced (was 30px) */
-    padding-bottom: 10px; /* Reduced (was 15px) */
-    border-bottom: 1px solid #e9ecef; /* Lighter border */
+/* HEADER STYLES */
+.app-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
-.page-header h1 {
-    font-size: 1em; /* Slightly smaller title */
-    margin: 0;
-    color: #212529;
-    font-weight: 600;
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;              /* allows absolute-centering nav */
+  padding: 8px 16px;
+  max-width: 1200px;
+  margin: 0 auto;                  /* no extra left offset so true page-center */
 }
+
+/* Logo */
+.app-title a {
+  font-size: 1.4em;
+  font-weight: 600;
+  color: #fca103;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.app-title a:hover span:first-child { color: #212529; }
+.app-title a:hover span:nth-child(2) { color: #c0392b; }
+.app-title a:hover img {
+  transform: rotate(-10deg) scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* Nav – perfectly centered regardless of side columns */
+.nav-links {
+  position: absolute;              /* pull out of flex flow */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 24px;
+}
+.nav-links a {
+  text-decoration: none;
+  color: #6c757d;
+  font-weight: 600;
+  font-size: 0.95em;
+}
+.nav-links a:hover { color: #E74C3C; }
+
+/* Auth – right-aligned */
 .auth-bar {
-    font-size: 0.875em; /* Smaller auth text */
-    color: #6c757d; /* Grey text */
-    white-space: nowrap; /* Prevent wrapping */
-}
-.auth-bar span {
-    margin-right: 5px;
+  display: flex;
+  gap: 10px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  align-items: center;
+  margin-left: auto;               /* push all the way right */
 }
 .auth-bar form { display: inline; }
-.auth-bar button, .auth-bar a {
-    background: none;
-    border: none;
-    color: #E74C3C; /* Standard link blue */
-    cursor: pointer;
-    padding: 0;
-    font: inherit;
-    font-size: 1em; /* Inherit size */
-    text-decoration: none;
-    margin-left: 5px;
+.auth-bar button,
+.auth-bar a {
+  background: none;
+  border: none;
+  color: #E74C3C;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-size: 1em;
+  text-decoration: none;
 }
-.auth-bar button:hover, .auth-bar a:hover {
-    text-decoration: underline;
+.auth-bar button:hover,
+.auth-bar a:hover { text-decoration: underline; }
+
+/* Hamburger */
+.menu-toggle {
+  display: none;
+  font-size: 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
-
-.app-header {
-    background-color: #ffffff;
-    padding: 4px 8px;
-    border-bottom: 1px solid #dee2e6;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-    flex-wrap: nowrap;
+/* MOBILE MENU */
+.mobile-menu {
+  display: none;
+  flex-direction: column;
+  padding: 10px 16px;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  animation: slideDown 0.3s ease forwards;
+}
+.mobile-menu a {
+  margin: 6px 0;
+  color: #343a40;
+  text-decoration: none;
+  font-weight: 500;
+}
+.mobile-menu a:hover { color: #E74C3C; }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.app-title a {
-    font-size: 1.4em;
-    font-weight: 600;
-    color: #fca103;
-    text-decoration: none;
-    letter-spacing: -0.3px;
-    display: inline-flex;
-    align-items: center;
-    transition: transform 0.2s ease, text-shadow 0.2s ease;
+/* Responsive – show mobile UI, hide desktop elements */
+@media (max-width: 768px) {
+  .nav-links   { display: none; }
+  .auth-bar    { display: none; }
+  .menu-toggle { display: block; }
+  .mobile-menu { display: none; }
+  .mobile-menu.show { display: flex; }
 }
 
-.app-title a:hover {
-    transform: translateY(-2px);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+footer {
+  margin-top: 40px;
+  padding-top: 15px;
+  text-align: center;
+  font-size: 0.85em;
+  color: #adb5bd;
+  border-top: 1px solid #e9ecef;
 }
-
-.app-title a:hover span:first-child {
-    color: #212529; /* darker black */
-}
-
-.app-title a:hover span:nth-child(2) {
-    color: #c0392b; /* deeper red */
-}
-.app-title a:hover img {
-    transform: rotate(-10deg) scale(1.05);
-    transition: transform 0.2s ease;
-}
-.auth-bar {
-    font-size: 0.85em;
-    white-space: nowrap;
-}
-
-@media (max-width: 600px) {
-    .app-header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 10px;
-    }
-
-    .auth-bar {
-        font-size: 0.8em;
-    }
-
-    .auth-bar a,
-    .auth-bar button {
-        margin-left: 8px;
-    }
-}
-        /* --- Footer --- */
-        footer {
-            margin-top: 40px; /* Adjusted slightly (was 50px) */
-            padding-top: 15px; /* Adjusted slightly (was 20px) */
-            text-align: center;
-            font-size: 0.85em;
-            color: #adb5bd; /* Lighter grey */
-            border-top: 1px solid #e9ecef;
-        }
-    </style>
-    {% block head %}{% endblock %}
+  </style>
+  {% block head %}{% endblock %}
 </head>
 <body>
-    <header class="app-header">
-<span class="app-title">
-  <a href="{% url 'annotations_app:view_folders' %}" style="text-decoration: none;">
-    <span style="color: #000000; font-weight: 800;">Protein</span><span style="color: #E74C3C; font-weight: 700;">Tinder</span>
-    <img src="{% static 'images/ProteinTinder_icon.png' %}" alt="Logo" style="height: 24px; vertical-align: middle; margin-left: 6px;">
-  </a>
-</span>
-        <div class="auth-bar">
-            <a href="{% url 'annotations_app:about' %}" style="color: #6c757d; text-decoration: none; font-size: 1em;margin-right: 1em;font-weight: 700;">About</a>
-            {% if user.is_authenticated %}
-                <span style="color: #5b4f4d;">{{ user.username }}</span>
-                <form method="post" action="{% url 'logout' %}">
-                    {% csrf_token %}
-                    <button type="submit" style="color: #E74C3C; font-weight: 500;">Logout</button>
-                </form>
-            {% else %}
-                <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
-                <a href="{% url 'signup' %}">Sign Up</a>
-            {% endif %}
-        </div>
-    </header>
 
-    <main class="page-wrapper">
-        {% block content %}{% endblock %}
-    </main>
+<!-- HEADER -->
+<header class="app-header">
+  <div class="app-header-inner">
 
-    {% block scripts %}{% endblock %}
+    <!-- Logo -->
+    <div class="app-title">
+      <a href="{% url 'annotations_app:home' %}">
+        <span style="color: #000000; font-weight: 800;">Protein</span><span style="color: #E74C3C; font-weight: 700;">Tinder</span>
+        <img src="{% static 'images/ProteinTinder_icon.png' %}" alt="Logo" style="height: 24px; margin-left: 6px;">
+      </a>
+    </div>
 
-    <!-- Footer stays the same -->
-    <footer>
-        <p><small>Annotation Tool © 2025</small></p>
-    </footer>
+    <!-- Nav links (desktop) -->
+    <nav class="nav-links">
+      <a href="{% url 'annotations_app:view_folders' %}">Browse</a>
+      <a href="{% url 'annotations_app:upload_zip' %}">Upload</a>
+      <a href="{% url 'annotations_app:about' %}">About</a>
+    </nav>
+
+    <!-- Auth section (desktop) -->
+    <div class="auth-bar">
+      {% if user.is_authenticated %}
+        <span>{{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+          <button type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
+        <a href="{% url 'signup' %}">Sign Up</a>
+      {% endif %}
+    </div>
+
+    <!-- Hamburger (mobile only) -->
+    <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
+  </div>
+
+  <!-- Mobile nav roll-out -->
+  <div id="mobileMenu" class="mobile-menu">
+    <a href="{% url 'annotations_app:view_folders' %}">Browse</a>
+    <a href="{% url 'annotations_app:upload_zip' %}">Upload</a>
+    <a href="{% url 'annotations_app:about' %}">About</a>
+    {% if user.is_authenticated %}
+      <span style="margin-top: 8px;">{{ user.username }}</span>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+        <button type="submit" style="margin-top: 6px; color: #E74C3C;">Logout</button>
+      </form>
+    {% else %}
+      <a href="{% url 'login' %}?next={{ request.path }}">Login</a>
+      <a href="{% url 'signup' %}">Sign Up</a>
+    {% endif %}
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="page-wrapper">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <p><small>Annotation Tool © 2025</small></p>
+</footer>
+
+<!-- SCRIPT -->
+<script>
+  function toggleMobileMenu() {
+    const menu = document.getElementById("mobileMenu");
+    menu.classList.toggle("show");
+  }
+</script>
+
+{% block scripts %}{% endblock %}
 </body>
 </html>

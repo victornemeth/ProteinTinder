@@ -1545,3 +1545,6 @@ def skip_manual_domain(request):
 
 def about_view(request):
     return render(request, 'annotations_app/about.html')
+
+def home(request):
+    return render(request, 'annotations_app/home.html')

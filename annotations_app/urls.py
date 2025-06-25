@@ -2,12 +2,16 @@
 from . import views
 from django.urls import path
 from django.conf import settings
+from django.conf.urls.static import static
+
 
 app_name = 'annotations_app'
 
 urlpatterns = [
     # --- Core Views ---
-    path('', views.view_folders, name='view_folders'),
+    path('', views.home, name='home'),
+    path('folder_list', views.view_folders, name='view_folders'),
+    
     path('upload/', views.upload_zip_view, name='upload_zip'),
     path('folder/<int:folder_id>/overview/', views.annotation_overview, name='annotation_overview'),
 
