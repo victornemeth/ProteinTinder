@@ -37,6 +37,30 @@ html, body {
   margin: 0 auto;                  /* no extra left offset so true page-center */
 }
 
+
+
+
+
+.app-title a span {
+  transition: color 0.3s ease, transform 0.3s ease;
+  display: inline-block;
+}
+
+.app-title a:hover span:first-child {
+  color: #212529;
+  transform: translateY(-2px);
+}
+
+.app-title a:hover span:nth-child(2) {
+  color: #c0392b;
+  transform: translateY(-2px);
+}
+
+
+
+
+
+
 /* Logo */
 .app-title a {
   font-size: 1.4em;
@@ -49,7 +73,7 @@ html, body {
 .app-title a:hover span:first-child { color: #212529; }
 .app-title a:hover span:nth-child(2) { color: #c0392b; }
 .app-title a:hover img {
-  transform: rotate(-10deg) scale(1.05);
+  transform: rotate(-10deg) scale(1.15);
   transition: transform 0.2s ease;
 }
 
@@ -68,7 +92,7 @@ html, body {
   font-weight: 600;
   font-size: 0.95em;
 }
-.nav-links a:hover { color: #E74C3C; }
+.nav-links a:hover { color: #E74C3C;font-weight: 800; }
 
 /* Auth – right-aligned */
 .auth-bar {
@@ -82,17 +106,24 @@ html, body {
 .auth-bar form { display: inline; }
 .auth-bar button,
 .auth-bar a {
-  background: none;
+  background-color: #E74C3C;
   border: none;
-  color: #E74C3C;
+  color: #fff;
   cursor: pointer;
-  padding: 0;
-  font: inherit;
-  font-size: 1em;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
   text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
+
 .auth-bar button:hover,
-.auth-bar a:hover { text-decoration: underline; }
+.auth-bar a:hover {
+  background-color: #c0392b;
+  transform: translateY(-1px);
+}
+
 
 /* Hamburger */
 .menu-toggle {
@@ -104,6 +135,31 @@ html, body {
 }
 
 /* MOBILE MENU */
+.mobile-logout-button {
+  background: none;
+  color: #6c757d;
+  margin-top: 6px;           /* top margin only */
+  margin-left: -5px;           /* top margin only */
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: block;              /* ensures it doesn't inline */
+  width: 100%;                 /* fills parent container cleanly */
+  text-align: left;            /* aligns text to the left */
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.mobile-logout-button:hover {
+  background-color: #f8f9fa;
+  color: #343a40;
+}
+
+
+
+
 .mobile-menu {
   display: none;
   flex-direction: column;
@@ -190,7 +246,7 @@ footer {
     {% if user.is_authenticated %}
       <span style="margin-top: 8px;">{{ user.username }}</span>
       <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-        <button type="submit" style="margin-top: 6px; color: #E74C3C;">Logout</button>
+        <button class="mobile-logout-button" type="submit" style="">Logout</button>
       </form>
     {% else %}
       <a href="{% url 'login' %}?next={{ request.path }}">Login</a>

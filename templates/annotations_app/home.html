@@ -2,46 +2,84 @@
 {% load static %}
 {% block title %}Home - Protein Tinder{% endblock %}
 
+{% block head %}
+<style>
+  /* smooth, subtle pop on hover */
+  .card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  }
+@media (max-width: 768px) {
+  .card:hover {
+    transform: scale(1.00);
+    box-shadow: 0 0px 0px rgba(0,0,0,0.10);
+  }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div style="max-width: 960px; margin: 40px auto; padding: 20px; text-align: center;">
 
     <!-- Logo and Title -->
-    
-    <h1 style="font-size: 2.5em; font-weight: 700; margin-bottom: 10px; color: #212529;margin-top: 0;">Welcome to Protein Tinder</h1>
-    <img src="{% static 'images/ProteinTinder.png' %}" alt="Protein Tinder Logo" style="width: 120px; margin-bottom: 16px;">
+    <h1 style="font-size: 2.5em; font-weight: 700; margin-bottom: 10px; color: #212529;margin-top: 0;">
+        Welcome to Protein Tinder
+    </h1>
+    <img src="{% static 'images/ProteinTinder.png' %}" alt="Protein Tinder Logo"
+         style="width: 120px; margin-bottom: 16px;">
     <p style="font-size: 1.1em; color: #495057; max-width: 700px; margin: 0 auto 30px;">
-        A lightweight, web-based platform for visual and intuitive annotation of protein structures. Upload your folders, swipe through PDBs, define domains, and export results — all in one place.
+        A lightweight, web-based platform for visual and intuitive annotation of protein structures. Upload your folders,
+        swipe through PDBs, define domains, and export results — all in one place.
     </p>
 
     <!-- Card Grid -->
     <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; margin-top: 30px;">
 
         <!-- View Folders -->
-        <div style="background: white; border: 1px solid #dee2e6; border-radius: 12px; padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
+        <div class="card" style="background: white; border: 1px solid #dee2e6; border-radius: 12px;
+             padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
             <h2 style="font-size: 1.3em; margin-bottom: 10px;">🗂️ View Protein Folders</h2>
             <p style="font-size: 0.95em; color: #555;">Explore your uploaded folders, track progress, and access annotations.</p>
-            <a href="{% url 'annotations_app:view_folders' %}" style="display: inline-block; margin-top: 12px; font-weight: 600; color: #007bff; text-decoration: none;">Browse →</a>
+            <a href="{% url 'annotations_app:view_folders' %}"
+               style="display: inline-block; margin-top: 12px; font-weight: 600; color: #007bff; text-decoration: none;">
+               Browse →
+            </a>
         </div>
 
         <!-- Upload Folder -->
-        <div style="background: white; border: 1px solid #dee2e6; border-radius: 12px; padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
+        <div class="card" style="background: white; border: 1px solid #dee2e6; border-radius: 12px;
+             padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
             <h2 style="font-size: 1.3em; margin-bottom: 10px;">📤 Upload Folder</h2>
             <p style="font-size: 0.95em; color: #555;">Submit a ZIP of your PDB (and CSV) files to begin annotating proteins.</p>
-            <a href="{% url 'annotations_app:upload_zip' %}" style="display: inline-block; margin-top: 12px; font-weight: 600; color: #28a745; text-decoration: none;">Upload →</a>
+            <a href="{% url 'annotations_app:upload_zip' %}"
+               style="display: inline-block; margin-top: 12px; font-weight: 600; color: #28a745; text-decoration: none;">
+               Upload →
+            </a>
         </div>
 
         <!-- Login -->
-        <div style="background: white; border: 1px solid #dee2e6; border-radius: 12px; padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
+        <div class="card" style="background: white; border: 1px solid #dee2e6; border-radius: 12px;
+             padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
             <h2 style="font-size: 1.3em; margin-bottom: 10px;">🔐 Login</h2>
             <p style="font-size: 0.95em; color: #555;">Access your existing annotation projects or continue working where you left off.</p>
-            <a href="{% url 'login' %}" style="display: inline-block; margin-top: 12px; font-weight: 600; color: #6c757d; text-decoration: none;">Login →</a>
+            <a href="{% url 'login' %}"
+               style="display: inline-block; margin-top: 12px; font-weight: 600; color: #6c757d; text-decoration: none;">
+               Login →
+            </a>
         </div>
 
         <!-- Register -->
-        <div style="background: white; border: 1px solid #dee2e6; border-radius: 12px; padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
+        <div class="card" style="background: white; border: 1px solid #dee2e6; border-radius: 12px;
+             padding: 20px; width: 260px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); text-align: left;">
             <h2 style="font-size: 1.3em; margin-bottom: 10px;">📝 Sign Up</h2>
             <p style="font-size: 0.95em; color: #555;">New here? Create an account to start annotating and uploading proteins.</p>
-            <a href="{% url 'signup' %}" style="display: inline-block; margin-top: 12px; font-weight: 600; color: #6610f2; text-decoration: none;">Register →</a>
+            <a href="{% url 'signup' %}"
+               style="display: inline-block; margin-top: 12px; font-weight: 600; color: #6610f2; text-decoration: none;">
+               Register →
+            </a>
         </div>
     </div>
 
