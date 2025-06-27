@@ -345,17 +345,22 @@ def upload_zip_view(request):
     return render(request, 'annotations_app/upload_zip.html', {'form': form})
 
 
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
+from django.db.models import Exists, OuterRef
+from django.shortcuts import render
+
 @login_required
 def view_folders(request):
     """
-    Show all folders, but *already* ordered the way the UI should display them:
-        1. My folders first
-        2. Within each owner-group: Architecture 🏟️ before Structure-only 🧬
-        3. Finally alphabetical by folder name (case-insensitive)
+    Show folders, ordered so that “my” folders come first, architecture before
+    structure-only, and alphabetically.  By default only your folders are shown;
+    if ?show_all=1 is passed, show everyone's.
     """
+    # ←—— NEW: decide whether to show all or only the user's
+    show_all = request.GET.get("show_all") == "1"
 
-    # Base queryset (order_by is optional because we will sort in Python anyway)
-    folders = ProteinFolder.objects.all().annotate(
+    base_qs = ProteinFolder.objects.all().annotate(
         has_architecture_data=Exists(
             Protein.objects.filter(
                 folder=OuterRef("pk"),
@@ -363,35 +368,25 @@ def view_folders(request):
             )
         )
     )
+    if not show_all:
+        base_qs = base_qs.filter(user=request.user)
 
     folder_data = []
-    for folder in folders:
+    for folder in base_qs:
         total_proteins = folder.proteins.count()
         annotated_count = Annotation.objects.filter(
             folder=folder, user=request.user
         ).count()
         is_complete = total_proteins > 0 and total_proteins == annotated_count
-        folder_data.append(
-            {
-                "folder": folder,
-                "is_architecture": folder.has_architecture_data,
-                "is_complete": is_complete,
-                "total_proteins": total_proteins,
-                "annotated_count": annotated_count,
-            }
-        )
+        folder_data.append({
+            "folder": folder,
+            "is_architecture": folder.has_architecture_data,
+            "is_complete": is_complete,
+            "total_proteins": total_proteins,
+            "annotated_count": annotated_count,
+        })
 
-    # ----------  KEY:  sort in the exact order we want  ----------
-    #
-    #   • False < True, so `folder.user != request.user` gives:
-    #       0  → my folder
-    #       1  → someone else's
-    #
-    #   • `not is_architecture` gives:
-    #       0  → architecture
-    #       1  → structure-only
-    #
-    #   • Finally sort by name as a tie-breaker.
+    # sort as before
     folder_data.sort(
         key=lambda d: (
             d["folder"].user != request.user,
@@ -399,13 +394,13 @@ def view_folders(request):
             d["folder"].name.lower(),
         )
     )
-    # ----------------------------------------------------------------
 
-    return render(
-        request,
-        "annotations_app/folder_list.html",
-        {"folder_data": folder_data, "users": get_user_model().objects.all()},
-    )
+    return render(request, "annotations_app/folder_list.html", {
+        "folder_data": folder_data,
+        "users": get_user_model().objects.all(),
+        "show_all": show_all,         # ←—— pass flag into template
+    })
+
 
 def signup_view(request):
     if request.method == 'POST':
