@@ -254,7 +254,15 @@ footer {
     {% endif %}
   </div>
 </header>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-EDSXK1R18V"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
 
+  gtag('config', 'G-EDSXK1R18V');
+</script>
 <!-- MAIN -->
 <main class="page-wrapper">
   {% block content %}{% endblock %}
@@ -262,7 +270,7 @@ footer {
 
 <!-- FOOTER -->
 <footer>
-  <p><small>Annotation Tool © 2025</small></p>
+  <p><small>ProteinTinder © 2025</small></p>
 </footer>
 
 <!-- SCRIPT -->
