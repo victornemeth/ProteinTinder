@@ -104,5 +104,17 @@ cd ProteinTinder
 docker compose up -d --build
 ```
 
+**.env** file should look like this
+```bash
+MYSQL_DATABASE=annotate_db
+MYSQL_USER=annotate_user
+MYSQL_PASSWORD=
+MYSQL_ROOT_PASSWORD=
+
+DJANGO_SECRET_KEY=
+DJANGO_DEBUG=True  # For local use debug mode is recommended.
+
+```
+
 Connect via localhost:8000
 

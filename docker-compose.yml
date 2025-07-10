@@ -1,9 +1,9 @@
 services:
-  db:
+  db2:
     image: mysql:8.0 # Use an official MySQL image
-    container_name: mysql_db_annotate
+    container_name: mysql_db_annotate2
     volumes:
-      - db_data:/var/lib/mysql # Persist database data using a named volume
+      - db_data2:/var/lib/mysql # Persist database data using a named volume
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE} # Read from .env file
       MYSQL_USER: ${MYSQL_USER}
@@ -11,42 +11,41 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD} # Required by the MySQL image
     ports:
       # Map host port 3307 to container port 3306 (optional, for external tools)
-      - "3307:3306"
+      - "3309:3306"
     restart: unless-stopped
 
-  web:
+  web2:
     build: . # Build the image from the Dockerfile in the current directory
-    container_name: django_web_annotate
+    container_name: django_web_annotate2
     command: >
       sh -c "
              echo 'Waiting for DB...' &&
-             while ! nc -z db 3306; do sleep 1; done;
+             while ! nc -z db2 3306; do sleep 1; done;
              echo 'DB Ready.' &&
              python manage.py makemigrations annotations_app --noinput &&
              python manage.py migrate --noinput &&
-             python create_superuser.py &&
              python manage.py runserver 0.0.0.0:8000
              "
     volumes:
       - .:/app # Mount current directory into the container for live code changes
       - ./pdb_files:/app/media/ # Mount local './pdb_files' to '/app/pdb_files_mnt' inside container
     ports:
-      - "8000:8000" # Map host port 8000 to container port 8000
+      - "8069:8000" # Map host port 8000 to container port 8000
     environment:
       # Pass DB connection details needed by Django settings.py
       DB_ENGINE: django.db.backends.mysql
       DB_NAME: ${MYSQL_DATABASE}
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
-      DB_HOST: db # Use the service name 'db' as the host
+      DB_HOST: db2 # Use the service name 'db' as the host
       DB_PORT: 3306
       # Add other environment variables if needed
     depends_on:
-      - db # Wait for the db service to start (but not necessarily be ready)
+      - db2 # Wait for the db service to start (but not necessarily be ready)
     env_file:
       - .env
 
     restart: unless-stopped
 
 volumes:
-  db_data: # Define the named volume for database persistence
+  db_data2: # Define the named volume for database persistence

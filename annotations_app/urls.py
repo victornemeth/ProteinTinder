@@ -1,12 +1,17 @@
 # annotations_app/urls.py
 from . import views
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+
 
 app_name = 'annotations_app'
 
 urlpatterns = [
     # --- Core Views ---
-    path('', views.view_folders, name='view_folders'),
+    path('', views.home, name='home'),
+    path('folder_list', views.view_folders, name='view_folders'),
+    
     path('upload/', views.upload_zip_view, name='upload_zip'),
     path('folder/<int:folder_id>/overview/', views.annotation_overview, name='annotation_overview'),
 
@@ -65,6 +70,10 @@ urlpatterns = [
     ),
     path("undo/manual/", views.undo_last_manual_domain, name="undo_manual_domain"),
     path("manual/skip/", views.skip_manual_domain, name="skip_manual_domain"),
-
+    path('about/', views.about_view, name='about'),
 
 ]
+
+# Keep media URL config for development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
