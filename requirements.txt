@@ -6,7 +6,7 @@ djangorestframework_simplejwt==5.5.1
 PyJWT>=2.13.0
 PyMySQL==1.2.0
 python-dotenv==1.2.2
-sqlparse==0.5.5
+sqlparse==0.6.0
 mysqlclient
 biopython
 gunicorn==26.0.0
