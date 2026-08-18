@@ -16,7 +16,33 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-CSRF_TRUSTED_ORIGINS = [
+def _env_flag(name, default='False'):
+    """Read a boolean env var. Tolerates inline '# comments' and 1/yes/on."""
+    raw = os.environ.get(name, default).split('#')[0].strip().lower()
+    return raw in ('true', '1', 'yes', 'on')
+
+
+def _env_list(name):
+    """Read a comma-separated env var into a list of stripped, non-empty items."""
+    raw = os.environ.get(name, '').split('#')[0]
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-key-for-non-docker')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# DEBUG=True switches this project into "local mode": plaintext HTTP on
+# localhost, permissive hosts, and Django serving static/media itself.
+DEBUG = _env_flag('DJANGO_DEBUG', 'False')
+
+PRODUCTION_HOSTS = [
+    'proteintinder2.bionetic.org', 'www.proteintinder2.bionetic.org',
+    'proteintinder.bionetic.org', 'www.proteintinder.bionetic.org',
+    'foldswipe.bionetic.org', 'www.foldswipe.bionetic.org',
+]
+
+PRODUCTION_ORIGINS = [
     "https://proteintinder2.bionetic.org",
     "http://proteintinder2.bionetic.org",  # add this just in case
     "https://proteintinder.bionetic.org",
@@ -25,21 +51,46 @@ CSRF_TRUSTED_ORIGINS = [
     "http://foldswipe.bionetic.org",  # add this just in case
 ]
 
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Only if using proxy
+# Extra hosts/origins for whoever is running this, e.g. a LAN IP:
+#   DJANGO_ALLOWED_HOSTS=192.168.1.50
+#   DJANGO_CSRF_TRUSTED_ORIGINS=http://192.168.1.50:8069
+EXTRA_ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
+EXTRA_CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-key-for-non-docker')
+if DEBUG:
+    # Local mode: accept any Host header so localhost, 127.0.0.1 and the
+    # machine's LAN IP all work without further configuration.
+    ALLOWED_HOSTS = ['*']
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True' # Check for 'True' string
+    CSRF_TRUSTED_ORIGINS = PRODUCTION_ORIGINS + [
+        "http://localhost:8069",
+        "http://127.0.0.1:8069",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ] + EXTRA_CSRF_TRUSTED_ORIGINS
 
-ALLOWED_HOSTS = ['proteintinder2.bionetic.org', 'www.proteintinder2.bionetic.org','proteintinder.bionetic.org', 'www.proteintinder.bionetic.org', 'foldswipe.bionetic.org', 'www.foldswipe.bionetic.org']
+    # Everything below is HTTPS-only hardening. Leaving it on over plain HTTP
+    # would redirect http://localhost:8069 to https:// (which nothing serves),
+    # drop the session/CSRF cookies, and pin localhost to HTTPS via HSTS.
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+    USE_X_FORWARDED_HOST = False
+else:
+    ALLOWED_HOSTS = PRODUCTION_HOSTS + EXTRA_ALLOWED_HOSTS
+    CSRF_TRUSTED_ORIGINS = PRODUCTION_ORIGINS + EXTRA_CSRF_TRUSTED_ORIGINS
+
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Only if using proxy
+    USE_X_FORWARDED_HOST = True
 
 
 # Application definition
@@ -158,5 +209,3 @@ MEDIA_ROOT = BASE_DIR / 'media' # Corresponds to /app/media/ in the container
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-USE_X_FORWARDED_HOST = True
