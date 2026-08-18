@@ -27,3 +27,7 @@ urlpatterns = [
 # Keep media URL config for development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Also serve collected static files. `runserver` handles this on its own,
+    # but the local docker-compose stack runs gunicorn, which does not — without
+    # this, /static/ 404s and the page loads unstyled at localhost:8069.
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
